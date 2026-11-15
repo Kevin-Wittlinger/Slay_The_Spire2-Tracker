@@ -9,9 +9,7 @@ button,.btn{cursor:pointer}button:hover,.btn:hover{border-color:var(--accent)}
 main{padding:20px;max-width:1100px;margin:0 auto}
 #status{color:var(--dim);font-size:12px}
 #status.live{color:var(--good)}#status.warn{color:var(--bad)}
-#settings{padding:14px 20px;border-bottom:1px solid var(--line);background:var(--panel)}
-#settings .row{display:flex;gap:8px;margin:6px 0}
-#settings input{flex:1}
+#importToken{width:150px}
 .hint{color:var(--dim);font-size:12px;margin:4px 0}
 .cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px;margin-bottom:20px}
 .stat{background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:12px}

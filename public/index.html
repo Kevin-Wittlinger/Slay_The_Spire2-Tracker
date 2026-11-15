@@ -11,20 +11,11 @@
   <h1>SPIRE LEDGER</h1>
   <span id="status">Connecting...</span>
   <span class="spacer"></span>
-  <button id="settingsBtn">Run folder</button>
-  <a class="btn" href="/api/export">Download database</a>
+  <label class="btn" for="runFiles">Import run folder</label>
+  <input id="runFiles" type="file" webkitdirectory directory multiple accept=".run" hidden>
+  <input id="importToken" type="password" placeholder="Import key" aria-label="Import key" autocomplete="off">
+  <button id="dbDownload" type="button">Download backup</button>
 </header>
-
-<section id="settings" hidden>
-  <label>Folder containing your .run files</label>
-  <div class="row">
-    <input id="dirInput" type="text" placeholder="C:\Users\you\AppData\Roaming\SlayTheSpire2\...\history">
-    <button id="dirSave">Save and scan</button>
-  </div>
-  <p class="hint">The server scans this folder and all subfolders, imports every solo run it finds, and keeps checking for new ones.
-    Multiplayer runs are ignored. You can also drop .run files anywhere on this page.</p>
-  <p id="settingsMsg" class="hint"></p>
-</section>
 
 <main>
   <div class="controls">

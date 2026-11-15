@@ -1,6 +1,7 @@
 // Every statistic on the site is one SQL query in this file.
 // Named parameters: @character and @ascension (NULL = no filter), @min (minimum sample size).
 // Abandoned runs are excluded everywhere. Multiplayer runs never reach the database.
+const { rowsToObjects } = require('../lib/db');
 
 const FILTER = `(@character IS NULL OR r.character = @character)
   AND (@ascension IS NULL OR r.ascension = @ascension)`;
@@ -201,13 +202,13 @@ const TABS = {
 };
 
 // Runs one named query. Only the parameters that query actually uses are bound.
-function runQuery(db, id, raw = {}) {
+async function runQuery(db, id, raw = {}) {
   const t = TABS[id];
   if (!t) return null;
   const names = [...new Set([...t.sql.matchAll(/@(\w+)/g)].map(m => m[1]))];
   const params = {};
   for (const n of names) params[n] = raw[n] ?? (n === 'min' ? 1 : null);
-  return db.prepare(t.sql).all(params);
+  return rowsToObjects(await db.execute({ sql: t.sql, args: params }));
 }
 
 module.exports = { TABS, runQuery };

@@ -23,9 +23,14 @@ const qs = () => {
   return p.toString();
 };
 
+function authHeaders() {
+  const token = $('importToken').value.trim();
+  return token ? { Authorization: `Bearer ${token}` } : {};
+}
+
 function renderTable(rows, host) {
   if (!rows.length) {
-    host.innerHTML = '<div class="empty">No data yet. Set your run folder (top right) or drop .run files on this page.</div>';
+    host.innerHTML = '<div class="empty">No data yet. Import a folder of .run files to begin.</div>';
     return;
   }
   const cols = Object.keys(rows[0]);
@@ -87,7 +92,7 @@ async function renderView() {
         <textarea id="sqlBox">SELECT character, COUNT(*) AS runs, SUM(win) AS wins FROM runs GROUP BY character</textarea>
         <p><button id="runSql">Run</button></p><div id="sqlOut"></div>`;
       $('runSql').onclick = async () => {
-        try { renderTable(await api('/api/sql', { method: 'POST', body: JSON.stringify({ sql: $('sqlBox').value }) }), $('sqlOut')); }
+        try { renderTable(await api('/api/sql', { method: 'POST', headers: authHeaders(), body: JSON.stringify({ sql: $('sqlBox').value }) }), $('sqlOut')); }
         catch (e) { $('sqlOut').innerHTML = `<div class="err">${e.message}</div>`; }
       };
     }
@@ -107,11 +112,8 @@ async function fillFilters() {
 
 async function updateStatus() {
   const s = await api('/api/status');
-  const w = s.watching, st = $('status');
-  const multi = s.files.multiplayer ? `, ${s.files.multiplayer} multiplayer skipped` : '';
-  if (w.error) { st.textContent = w.error; st.className = 'warn'; }
-  else if (w.dir) { st.textContent = `Watching ${w.dir}: ${s.runs} solo runs${multi}`; st.className = 'live'; }
-  else { st.textContent = 'No run folder set yet. Click "Run folder".'; st.className = 'warn'; $('settings').hidden = false; }
+  $('status').textContent = `${s.runs} runs in ledger`;
+  $('status').className = '';
 }
 
 async function refresh() {
@@ -120,11 +122,45 @@ async function refresh() {
 }
 
 async function importDropped(files) {
-  const runs = [];
-  for (const f of files) { try { runs.push(JSON.parse(await f.text())); } catch { /* not JSON */ } }
-  if (!runs.length) return;
-  const r = await api('/api/import', { method: 'POST', body: JSON.stringify(runs) });
-  $('status').textContent = `Imported ${r.imported}, duplicates ${r.duplicate}, multiplayer skipped ${r.multiplayer}, invalid ${r.invalid}`;
+  const runFiles = [...files].filter(file => file.name.toLowerCase().endsWith('.run'));
+  if (!runFiles.length) {
+    $('status').textContent = 'No .run files found in that selection.';
+    return;
+  }
+
+  const totals = { imported: 0, duplicate: 0, multiplayer: 0, invalid: 0 };
+  const headers = authHeaders();
+  const maxBatchBytes = 3 * 1024 * 1024;
+  let batch = [], batchBytes = 2, processed = 0;
+
+  async function sendBatch() {
+    if (!batch.length) return;
+    const result = await api('/api/import', { method: 'POST', headers, body: JSON.stringify(batch) });
+    for (const key of Object.keys(totals)) totals[key] += result[key];
+    batch = [];
+    batchBytes = 2;
+  }
+
+  try {
+    for (const file of runFiles) {
+      let run;
+      try { run = JSON.parse(await file.text()); }
+      catch { totals.invalid++; processed++; continue; }
+      const size = new TextEncoder().encode(JSON.stringify(run)).length + 1;
+      if (size > maxBatchBytes) { totals.invalid++; processed++; continue; }
+      if (batch.length && batchBytes + size > maxBatchBytes) await sendBatch();
+      batch.push(run);
+      batchBytes += size;
+      processed++;
+      $('status').textContent = `Reading runs ${processed} of ${runFiles.length}...`;
+    }
+    await sendBatch();
+    $('status').textContent = `Processed ${processed}: imported ${totals.imported}, duplicates ${totals.duplicate}, multiplayer skipped ${totals.multiplayer}, invalid ${totals.invalid}`;
+    await refresh();
+  } catch (error) {
+    $('status').textContent = error.message;
+    $('status').className = 'warn';
+  }
 }
 
 async function main() {
@@ -132,22 +168,35 @@ async function main() {
   renderTabs();
   await refresh();
   ['fChar', 'fAsc', 'fMin'].forEach(id => $(id).addEventListener('change', () => { renderOverview(); renderView(); }));
-  $('settingsBtn').onclick = () => { $('settings').hidden = !$('settings').hidden; };
-  $('dirSave').onclick = async () => {
+  const runFiles = $('runFiles');
+  runFiles.addEventListener('change', () => {
+    importDropped(runFiles.files);
+    runFiles.value = '';
+  });
+  const importToken = $('importToken');
+  importToken.value = sessionStorage.getItem('spireImportToken') || '';
+  importToken.addEventListener('input', () => sessionStorage.setItem('spireImportToken', importToken.value));
+  $('dbDownload').addEventListener('click', async () => {
     try {
-      await api('/api/config', { method: 'POST', body: JSON.stringify({ runsDir: $('dirInput').value.trim() }) });
-      $('settingsMsg').textContent = 'Saved. Scanning...';
-      setTimeout(refresh, 1500);
-    } catch (e) { $('settingsMsg').textContent = e.message; }
-  };
+      const response = await fetch('/api/export', { headers: authHeaders() });
+      if (!response.ok) {
+        const result = await response.json();
+        throw new Error(result.error || response.statusText);
+      }
+      const url = URL.createObjectURL(await response.blob());
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = 'spire-ledger-export.json';
+      link.click();
+      setTimeout(() => URL.revokeObjectURL(url), 0);
+    } catch (error) {
+      $('status').textContent = error.message;
+      $('status').className = 'warn';
+    }
+  });
   document.body.addEventListener('dragover', e => e.preventDefault());
   document.body.addEventListener('drop', e => { e.preventDefault(); importDropped([...e.dataTransfer.files]); });
 
-  // Live updates: the server pushes an event whenever a new run is imported.
-  const es = new EventSource('/api/events');
-  es.addEventListener('update', refresh);
-  es.onerror = () => { $('status').textContent = 'Server connection lost, retrying...'; $('status').className = 'warn'; };
-  es.onopen = updateStatus;
-  setInterval(updateStatus, 10000);
+  setInterval(refresh, 60000);
 }
 main();

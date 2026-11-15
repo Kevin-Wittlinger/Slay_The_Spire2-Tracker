@@ -1,11 +1,10 @@
 // Smoke test: node test/smoke.js
 const assert = require('assert');
-const fs = require('fs');
-const os = require('os');
-const path = require('path');
+const { Readable } = require('stream');
+process.env.IMPORT_TOKEN = 'smoke-test-token';
 const { openDb } = require('../lib/db');
 const { createImporter } = require('../lib/importer');
-const { Watcher } = require('../lib/watcher');
+const { createHandler } = require('../lib/handler');
 const { TABS, runQuery } = require('../db/queries');
 
 function makeRun({ seed, win = false, players = 1, character = 'CHARACTER.REGENT', start = 1794596230 }) {
@@ -34,44 +33,64 @@ function makeRun({ seed, win = false, players = 1, character = 'CHARACTER.REGENT
   };
 }
 
-const db = openDb(':memory:');
-const importer = createImporter(db);
-
-// solo run imports, duplicate is ignored, multiplayer and junk are rejected
-assert.strictEqual(importer.importRun(makeRun({ seed: 'A' })).status, 'imported');
-assert.strictEqual(importer.importRun(makeRun({ seed: 'A' })).status, 'duplicate');
-assert.strictEqual(importer.importRun(makeRun({ seed: 'B', players: 2 })).status, 'multiplayer');
-assert.strictEqual(importer.importRun({ nope: true }).status, 'invalid');
-assert.strictEqual(importer.importRun(makeRun({ seed: 'C', win: true, start: 1794600000 })).status, 'imported');
-
-assert.strictEqual(db.prepare('SELECT COUNT(*) n FROM runs').get().n, 2);
-assert.strictEqual(db.prepare("SELECT died FROM fights WHERE type='boss' AND run_id LIKE 'A:%'").get().died, 1);
-assert.strictEqual(db.prepare("SELECT died FROM fights WHERE type='boss' AND run_id LIKE 'C:%'").get().died, 0);
-
-// every stat query executes, with and without filters
-for (const id of Object.keys(TABS)) {
-  runQuery(db, id, {});
-  runQuery(db, id, { character: 'CHARACTER.REGENT', ascension: 10, min: 1 });
+function createResponse() {
+  return {
+    headers: {},
+    writeHead(status, headers) { this.status = status; Object.assign(this.headers, headers); },
+    setHeader(name, value) { this.headers[name] = value; },
+    end(body = '') { this.body = body; },
+  };
 }
-assert.strictEqual(runQuery(db, 'overview', {})[0].win_pct, 50);
-assert.strictEqual(runQuery(db, 'fight_types', {}).find(r => r.type === 'boss').win_pct, 50);
 
-// watcher: imports a folder, skips multiplayer, picks up a new file on the next scan
-const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'spire-'));
-const db2 = openDb(':memory:');
-const w = new Watcher(db2, createImporter(db2), { settleMs: 0 });
-const put = (name, run) => fs.writeFileSync(path.join(dir, name), JSON.stringify(run));
-put('1.run', makeRun({ seed: 'X1' }));
-put('2.run', makeRun({ seed: 'X2', players: 2 }));
-fs.writeFileSync(path.join(dir, '3.run'), '{ not json');
-fs.utimesSync(path.join(dir, '3.run'), new Date(Date.now() - 60000), new Date(Date.now() - 60000));
-w.dir = dir;
-assert.strictEqual(w.scan(), 1);
-assert.strictEqual(w.scan(), 0);
-put('4.run', makeRun({ seed: 'X4', start: 1794700000 }));
-assert.strictEqual(w.scan(), 1);
-assert.strictEqual(db2.prepare('SELECT COUNT(*) n FROM runs').get().n, 2);
-assert.strictEqual(db2.prepare("SELECT COUNT(*) n FROM imported_files WHERE status='multiplayer'").get().n, 1);
+async function dispatch(handler, url, method = 'GET', body, token) {
+  const chunks = body === undefined ? [] : [Buffer.from(JSON.stringify(body))];
+  const req = Readable.from(chunks);
+  req.url = url;
+  req.method = method;
+  req.headers = token ? { authorization: `Bearer ${token}` } : {};
+  const res = createResponse();
+  await handler(req, res);
+  return res;
+}
 
-fs.rmSync(dir, { recursive: true });
-console.log('All smoke tests passed.');
+async function main() {
+  const db = await openDb(':memory:');
+  const importer = createImporter(db);
+  assert.strictEqual((await importer.importRun(makeRun({ seed: 'A' }))).status, 'imported');
+  assert.strictEqual((await importer.importRun(makeRun({ seed: 'A' }))).status, 'duplicate');
+  assert.strictEqual((await importer.importRun(makeRun({ seed: 'B', players: 2 }))).status, 'multiplayer');
+  assert.strictEqual((await importer.importRun({ nope: true })).status, 'invalid');
+  assert.strictEqual((await importer.importRun(makeRun({ seed: 'C', win: true, start: 1794600000 }))).status, 'imported');
+
+  const count = await db.execute('SELECT COUNT(*) AS n FROM runs');
+  assert.strictEqual(Number(count.rows[0].n), 2);
+  const lostFight = await db.execute("SELECT died FROM fights WHERE type='boss' AND run_id LIKE 'A:%'");
+  assert.strictEqual(Number(lostFight.rows[0].died), 1);
+  const wonFight = await db.execute("SELECT died FROM fights WHERE type='boss' AND run_id LIKE 'C:%'");
+  assert.strictEqual(Number(wonFight.rows[0].died), 0);
+
+  for (const id of Object.keys(TABS)) {
+    await runQuery(db, id, {});
+    await runQuery(db, id, { character: 'CHARACTER.REGENT', ascension: 10, min: 1 });
+  }
+  assert.strictEqual((await runQuery(db, 'overview', {}))[0].win_pct, 50);
+  assert.strictEqual((await runQuery(db, 'fight_types', {})).find(row => row.type === 'boss').win_pct, 50);
+
+  const handler = createHandler(db);
+  assert.strictEqual((await dispatch(handler, '/api/import', 'POST', [makeRun({ seed: 'D' })])).status, 401);
+  const imported = await dispatch(handler, '/api/import', 'POST', [makeRun({ seed: 'D' })], process.env.IMPORT_TOKEN);
+  assert.strictEqual(imported.status, 200);
+  assert.strictEqual(JSON.parse(imported.body).imported, 1);
+  const status = await dispatch(handler, '/api/index?route=status');
+  assert.strictEqual(JSON.parse(status.body).runs, 3);
+  assert.strictEqual((await dispatch(handler, '/api/sql', 'POST', { sql: 'SELECT * FROM runs' })).status, 401);
+  assert.strictEqual((await dispatch(handler, '/api/export')).status, 401);
+
+  await db.close();
+  console.log('All smoke tests passed.');
+}
+
+main().catch(error => {
+  console.error(error);
+  process.exitCode = 1;
+});

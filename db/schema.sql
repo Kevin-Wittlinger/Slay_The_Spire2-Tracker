@@ -60,14 +60,6 @@ CREATE TABLE IF NOT EXISTS events (
   choice   TEXT
 );
 
--- Bookkeeping so files are not re-parsed on every scan or restart.
--- status: imported | duplicate | multiplayer | invalid
-CREATE TABLE IF NOT EXISTS imported_files (
-  path   TEXT PRIMARY KEY,
-  mtime  REAL NOT NULL,
-  status TEXT NOT NULL
-);
-
 CREATE INDEX IF NOT EXISTS idx_cards_card    ON run_cards(card_id);
 CREATE INDEX IF NOT EXISTS idx_cards_run     ON run_cards(run_id);
 CREATE INDEX IF NOT EXISTS idx_relics_relic  ON run_relics(relic_id);
