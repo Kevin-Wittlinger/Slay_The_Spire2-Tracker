@@ -17,6 +17,12 @@ Solo run statistics for Slay the Spire 2, stored in SQLite and shown on a local 
 You can also skip the website step: `node server.js "C:\path\to\your\runs"`.
 The folder is remembered in `config.json`.
 
+## Vercel
+
+Import the repository into Vercel with the **Other** framework preset. `vercel.json` publishes `public/` without
+installing the native SQLite dependency. This deploys the frontend only; API-backed statistics and imports still
+require a hosted backend and database.
+
 ## What it does
 
 - **Imports every existing run** in the folder on the first scan (it can take a few seconds for large histories).
