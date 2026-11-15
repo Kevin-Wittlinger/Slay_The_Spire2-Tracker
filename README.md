@@ -36,17 +36,17 @@ enter the `IMPORT_TOKEN` in the site to upload runs or access raw data.
 
 ## Files
 
-| File              | Purpose                                                                                       |
-| ----------------- | --------------------------------------------------------------------------------------------- |
+| File              | Purpose                                                       |
+| ----------------- | ------------------------------------------------------------- |
 | `db/schema.sql`   | Table definitions for runs, cards, relics, fights, and events |
-| `db/queries.js`   | Every statistic as a SQL query                                                                |
-| `lib/importer.js` | Parses one `.run` file into rows, rejects multiplayer                                         |
-| `lib/db.js`       | Opens local SQLite or remote Turso                                                            |
-| `lib/handler.js`  | Shared API routes                                                                             |
-| `api/index.js`    | Vercel Function entry point                                                                   |
-| `server.js`       | Local development server                                                                      |
-| `public/`         | The website (HTML, CSS, JS)                                                                   |
-| `test/smoke.js`   | `npm test`                                                                                    |
+| `db/queries.js`   | Every statistic as a SQL query                                |
+| `lib/importer.js` | Parses one `.run` file into rows, rejects multiplayer         |
+| `lib/db.js`       | Opens local SQLite or remote Turso                            |
+| `lib/handler.js`  | Shared API routes                                             |
+| `api/index.js`    | Vercel Function entry point                                   |
+| `server.js`       | Local development server                                      |
+| `public/`         | The website (HTML, CSS, JS)                                   |
+| `test/smoke.js`   | `npm test`                                                    |
 
 Locally, the database lives at `data/spire-ledger.db`. Production data is stored in Turso.
 

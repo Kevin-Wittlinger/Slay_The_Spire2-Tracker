@@ -1,7 +1,7 @@
 // Every statistic on the site is one SQL query in this file.
 // Named parameters: @character and @ascension (NULL = no filter), @min (minimum sample size).
 // Abandoned runs are excluded everywhere. Multiplayer runs never reach the database.
-const { rowsToObjects } = require('../lib/db');
+const { rowsToObjects } = require("../lib/db");
 
 const FILTER = `(@character IS NULL OR r.character = @character)
   AND (@ascension IS NULL OR r.ascension = @ascension)`;
@@ -9,7 +9,7 @@ const BASE = `r.abandoned = 0 AND ${FILTER}`;
 
 const TABS = {
   overview: {
-    title: 'Overview',
+    title: "Overview",
     hidden: true,
     sql: `
       SELECT COUNT(*) AS runs,
@@ -17,11 +17,11 @@ const TABS = {
              COALESCE(ROUND(100.0 * SUM(r.win) / NULLIF(COUNT(*), 0), 1), 0) AS win_pct,
              COALESCE(ROUND(AVG(r.run_time) / 60.0, 1), 0) AS avg_minutes
       FROM runs r
-      WHERE ${BASE}`
+      WHERE ${BASE}`,
   },
 
   characters: {
-    title: 'Characters',
+    title: "Characters",
     sql: `
       SELECT r.character,
              COUNT(*) AS runs,
@@ -32,11 +32,11 @@ const TABS = {
       WHERE ${BASE}
       GROUP BY r.character
       HAVING runs >= @min
-      ORDER BY runs DESC`
+      ORDER BY runs DESC`,
   },
 
   ascensions: {
-    title: 'Ascensions',
+    title: "Ascensions",
     sql: `
       SELECT r.ascension,
              COUNT(*) AS runs,
@@ -46,11 +46,11 @@ const TABS = {
       WHERE ${BASE}
       GROUP BY r.ascension
       HAVING runs >= @min
-      ORDER BY r.ascension`
+      ORDER BY r.ascension`,
   },
 
   card_win_rate: {
-    title: 'Card win rate',
+    title: "Card win rate",
     // A run counts once per card, no matter how many copies were in the final deck.
     // floor_added > 1 leaves out the starting deck.
     sql: `
@@ -66,11 +66,11 @@ const TABS = {
       )
       GROUP BY card
       HAVING runs >= @min
-      ORDER BY win_pct DESC, runs DESC`
+      ORDER BY win_pct DESC, runs DESC`,
   },
 
   card_pick_rate: {
-    title: 'Card pick rate',
+    title: "Card pick rate",
     // Only combat rewards (monster / elite / boss), not shop stock.
     sql: `
       SELECT cc.card_id AS card,
@@ -82,11 +82,11 @@ const TABS = {
       WHERE cc.source IN ('monster', 'elite', 'boss') AND ${BASE}
       GROUP BY cc.card_id
       HAVING offered >= @min
-      ORDER BY pick_pct DESC, offered DESC`
+      ORDER BY pick_pct DESC, offered DESC`,
   },
 
   relic_win_rate: {
-    title: 'Relic win rate',
+    title: "Relic win rate",
     sql: `
       SELECT relic,
              COUNT(*) AS runs,
@@ -100,11 +100,11 @@ const TABS = {
       )
       GROUP BY relic
       HAVING runs >= @min
-      ORDER BY win_pct DESC, runs DESC`
+      ORDER BY win_pct DESC, runs DESC`,
   },
 
   fight_types: {
-    title: 'Normal / Elite / Boss',
+    title: "Normal / Elite / Boss",
     sql: `
       SELECT f.type,
              COUNT(*) AS fights,
@@ -117,11 +117,11 @@ const TABS = {
       WHERE ${BASE}
       GROUP BY f.type
       HAVING fights >= @min
-      ORDER BY CASE f.type WHEN 'monster' THEN 1 WHEN 'elite' THEN 2 ELSE 3 END`
+      ORDER BY CASE f.type WHEN 'monster' THEN 1 WHEN 'elite' THEN 2 ELSE 3 END`,
   },
 
   encounters: {
-    title: 'Enemies',
+    title: "Enemies",
     sql: `
       SELECT f.encounter_id AS encounter,
              f.type,
@@ -135,11 +135,11 @@ const TABS = {
       WHERE ${BASE}
       GROUP BY f.encounter_id, f.type
       HAVING fights >= @min
-      ORDER BY fights DESC, avg_damage_taken DESC`
+      ORDER BY fights DESC, avg_damage_taken DESC`,
   },
 
   events: {
-    title: 'Events',
+    title: "Events",
     // Run win rate for runs that hit the event at least once.
     sql: `
       SELECT event,
@@ -154,11 +154,11 @@ const TABS = {
       )
       GROUP BY event
       HAVING seen >= @min
-      ORDER BY seen DESC`
+      ORDER BY seen DESC`,
   },
 
   event_choices: {
-    title: 'Event choices',
+    title: "Event choices",
     sql: `
       SELECT e.event_id AS event,
              e.choice,
@@ -170,22 +170,22 @@ const TABS = {
       WHERE ${BASE}
       GROUP BY e.event_id, e.choice
       HAVING times >= @min
-      ORDER BY times DESC`
+      ORDER BY times DESC`,
   },
 
   killed_by: {
-    title: 'Killed by',
+    title: "Killed by",
     sql: `
       SELECT r.killed_by,
              COUNT(*) AS deaths
       FROM runs r
       WHERE r.win = 0 AND r.killed_by IS NOT NULL AND ${BASE}
       GROUP BY r.killed_by
-      ORDER BY deaths DESC`
+      ORDER BY deaths DESC`,
   },
 
   recent_runs: {
-    title: 'Recent runs',
+    title: "Recent runs",
     sql: `
       SELECT datetime(r.start_time, 'unixepoch', 'localtime') AS started,
              r.character,
@@ -197,17 +197,17 @@ const TABS = {
       FROM runs r
       WHERE r.abandoned = 0 AND ${FILTER}
       ORDER BY r.start_time DESC
-      LIMIT 100`
-  }
+      LIMIT 100`,
+  },
 };
 
 // Runs one named query. Only the parameters that query actually uses are bound.
 async function runQuery(db, id, raw = {}) {
   const t = TABS[id];
   if (!t) return null;
-  const names = [...new Set([...t.sql.matchAll(/@(\w+)/g)].map(m => m[1]))];
+  const names = [...new Set([...t.sql.matchAll(/@(\w+)/g)].map((m) => m[1]))];
   const params = {};
-  for (const n of names) params[n] = raw[n] ?? (n === 'min' ? 1 : null);
+  for (const n of names) params[n] = raw[n] ?? (n === "min" ? 1 : null);
   return rowsToObjects(await db.execute({ sql: t.sql, args: params }));
 }
 
