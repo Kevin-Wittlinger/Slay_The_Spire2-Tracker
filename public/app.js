@@ -179,16 +179,17 @@ function renderProfileControls() {
   $("profileScope").disabled = !currentProfile;
   $("globalScope").className = currentScope === "global" ? "on" : "";
   $("profileScope").className = currentScope === "profile" ? "on" : "";
-  $("accountButton").hidden = Boolean(currentProfile);
+  $("signInButton").hidden = Boolean(currentProfile);
+  $("createProfileButton").hidden = Boolean(currentProfile);
   $("signOutButton").hidden = !currentProfile;
+  $("importRunButton").hidden = !currentProfile;
+  $("runFiles").disabled = !currentProfile;
 }
 
 function setAccountMode(mode) {
   accountMode = mode;
   $("accountSubmit").textContent =
     mode === "register" ? "Create profile" : "Sign in";
-  $("accountMode").textContent =
-    mode === "register" ? "I already have a profile" : "Create a profile";
   $("accountPassword").autocomplete =
     mode === "register" ? "new-password" : "current-password";
 }
@@ -288,14 +289,13 @@ async function main() {
     renderProfileControls();
     refresh();
   });
-  $("accountButton").addEventListener("click", () => {
-    $("accountPanel").hidden = !$("accountPanel").hidden;
+  const openAccountPanel = (mode) => {
+    setAccountMode(mode);
+    $("accountPanel").hidden = false;
     $("accountMessage").textContent = "";
-  });
-  $("accountMode").addEventListener("click", () => {
-    setAccountMode(accountMode === "login" ? "register" : "login");
-    $("accountMessage").textContent = "";
-  });
+  };
+  $("signInButton").addEventListener("click", () => openAccountPanel("login"));
+  $("createProfileButton").addEventListener("click", () => openAccountPanel("register"));
   $("accountForm").addEventListener("submit", async (event) => {
     event.preventDefault();
     $("accountMessage").textContent = "Working...";

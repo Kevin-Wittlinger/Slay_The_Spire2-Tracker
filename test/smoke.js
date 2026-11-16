@@ -182,9 +182,18 @@ async function main() {
       .status,
     401,
   );
+  assert.strictEqual(
+    (
+      await dispatch(handler, "/api/register", "POST", {
+        username: "short-password",
+        password: "abcd",
+      })
+    ).status,
+    400,
+  );
   const registered = await dispatch(handler, "/api/register", "POST", {
     username: "alice",
-    password: "a-secure-test-password",
+    password: "abcde",
   });
   assert.strictEqual(registered.status, 200);
   const aliceCookie = registered.headers["Set-Cookie"].split(";")[0];

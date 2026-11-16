@@ -11,7 +11,7 @@
       <h1>STS2 TRACKER</h1>
       <span id="status">Connecting...</span>
       <span class="spacer"></span>
-      <label class="btn" for="runFiles">Import run folder</label>
+      <label id="importRunButton" class="btn" for="runFiles">Import run folder</label>
       <input
         id="runFiles"
         type="file"
@@ -36,7 +36,8 @@
       </div>
       <span id="profileLabel">Combined public stats</span>
       <span class="spacer"></span>
-      <button id="accountButton" type="button">Sign in / create profile</button>
+      <button id="signInButton" type="button">Sign in</button>
+      <button id="createProfileButton" type="button">Create profile</button>
       <button id="signOutButton" type="button" hidden>Sign out</button>
     </section>
 
@@ -57,12 +58,11 @@
             id="accountPassword"
             type="password"
             autocomplete="current-password"
-            minlength="10"
+            minlength="5"
             maxlength="128"
             required
         /></label>
         <button id="accountSubmit" type="submit">Sign in</button>
-        <button id="accountMode" type="button">Create a profile</button>
         <span id="accountMessage" class="hint" role="status"></span>
       </form>
     </section>
