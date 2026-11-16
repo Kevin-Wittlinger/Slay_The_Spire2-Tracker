@@ -245,6 +245,14 @@ async function main() {
   ]);
   await patchDb.close();
 
+  // Guard against scroll-jump bugs: views must be replaced through swapView() in app.js,
+  // never by emptying the container first (see the comment on swapView).
+  const fs = require("fs");
+  const pageSource = (name) => fs.readFileSync(require("path").join(__dirname, "..", "public", name), "utf8");
+  assert.strictEqual(pageSource("app.js").split("host.replaceChildren(").length - 1, 1);
+  assert.strictEqual(pageSource("trends.js").includes("host.replaceChildren("), false);
+  assert.strictEqual(pageSource("trends.js").includes("host.append("), false);
+
   // Trends: one row per run, oldest first, and the page-side math for win rate over time.
   const trendRows = await runQuery(db, "trends", {});
   assert.strictEqual(trendRows.length, 2);

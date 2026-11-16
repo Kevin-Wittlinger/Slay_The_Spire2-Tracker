@@ -400,10 +400,23 @@ function emptyMessage() {
     : `${state.view.profile.username} hasn't imported any runs yet.`;
 }
 
+// The ONLY way a view's content should be replaced (tables, charts, errors).
+// Emptying the container first makes the page briefly shorter, and the browser then
+// clamps the scroll position, which looks like a jump to the top. So: build the new
+// content off-screen, hold the old height for a frame, swap in one step, and keep the
+// scroll position. Anything new that redraws the view should call this.
+function swapView(host, ...nodes) {
+  const scrollY = window.scrollY;
+  host.style.setProperty("min-height", `${host.offsetHeight}px`);
+  host.replaceChildren(...nodes);
+  window.scrollTo({ top: scrollY });
+  // A timer, not requestAnimationFrame: frames don't run in background tabs.
+  setTimeout(() => host.style.removeProperty("min-height"), 60);
+}
+
 function renderTable(rows, host) {
-  host.replaceChildren();
   if (!rows.length) {
-    host.append(el("div", { class: "empty", text: emptyMessage() }));
+    swapView(host, el("div", { class: "empty", text: emptyMessage() }));
     return;
   }
 
@@ -568,7 +581,9 @@ function renderTable(rows, host) {
   });
   toolbar.append(count);
 
-  host.append(
+  draw();
+  swapView(
+    host,
     toolbar,
     el(
       "div",
@@ -576,7 +591,6 @@ function renderTable(rows, host) {
       el("table", {}, el("thead", {}, headRow), tbody),
     ),
   );
-  draw();
 }
 
 // ---------- data loading ----------
@@ -610,7 +624,7 @@ async function renderView(loadId) {
     else renderTable(rows, host);
   } catch (error) {
     if (loadId !== state.loadId) return;
-    host.replaceChildren(el("div", { class: "err", text: error.message }));
+    swapView(host, el("div", { class: "err", text: error.message }));
   } finally {
     if (loadId === state.loadId) {
       host.removeAttribute("aria-busy");

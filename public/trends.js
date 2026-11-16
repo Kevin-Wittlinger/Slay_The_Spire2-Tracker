@@ -312,9 +312,9 @@ function drawChart(data, config, width) {
 
 function renderTrends(rows, host, options = {}) {
   trendsState.last = { rows, host, options };
-  host.replaceChildren();
   if (rows.length < 2) {
-    host.append(
+    swapView(
+      host,
       el("div", {
         class: "empty",
         text: rows.length
@@ -333,7 +333,14 @@ function renderTrends(rows, host, options = {}) {
   const recentWins =
     last.wins - (start ? data.overall[start - 1].wins : 0);
   const recentRuns = data.total - start;
-  const rerender = () => renderTrends(rows, host, options);
+  // Redraw in place (swapView keeps the scroll position); keep keyboard focus on the clicked button.
+  const rerender = (focusKey) => {
+    renderTrends(rows, host, options);
+    if (focusKey)
+      host
+        .querySelector(`[data-key="${CSS.escape(focusKey)}"]`)
+        ?.focus({ preventScroll: true });
+  };
   const wrap = el("div", { class: "trend-wrap" });
 
   // ----- header: summary + mode switch -----
@@ -366,12 +373,13 @@ function renderTrends(rows, host, options = {}) {
       group.append(
         el("button", {
           type: "button",
+          "data-key": `mode:${value}`,
           "aria-pressed": String(mode === value),
           text: label,
           onclick: () => {
             trendsState.mode = value;
             if (typeof writeHash === "function") writeHash();
-            rerender();
+            rerender(`mode:${value}`);
           },
         }),
       );
@@ -392,6 +400,7 @@ function renderTrends(rows, host, options = {}) {
         {
           type: "button",
           class: "legend-item",
+          "data-key": `legend:${c.character}`,
           "aria-pressed": String(!off),
           title: "Click to hide or show this character in both charts",
         },
@@ -405,7 +414,7 @@ function renderTrends(rows, host, options = {}) {
       button.addEventListener("click", () => {
         if (off) trendsState.hidden.delete(c.character);
         else trendsState.hidden.add(c.character);
-        rerender();
+        rerender(`legend:${c.character}`);
       });
       legend.append(button);
     });
@@ -476,7 +485,7 @@ function renderTrends(rows, host, options = {}) {
           : "Use the filters above to narrow by ascension or patch. Hover a chart for exact numbers.",
     }),
   );
-  host.append(wrap);
+  swapView(host, wrap);
 }
 
 // Redraw at the new width when the window is resized.
