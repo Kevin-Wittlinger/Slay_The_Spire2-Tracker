@@ -530,7 +530,6 @@ function choosePlayer(player) {
 
 const searchPlayers = debounce(async () => {
   const query = $("profileSearch").value.trim();
-  if (!query) return closeResults();
   try {
     const found = await api(`/api/profiles?q=${encodeURIComponent(query)}`);
     if ($("profileSearch").value.trim() !== query) return; // stale
@@ -541,14 +540,19 @@ const searchPlayers = debounce(async () => {
         ? found.map((player) =>
             el("li", {
               role: "option",
-              text: player.username,
+              text: `${player.username} · ${nf.format(player.runs)} ${player.runs === 1 ? "run" : "runs"}`,
               onmousedown: (event) => {
                 event.preventDefault();
                 choosePlayer(player);
               },
             }),
           )
-        : [el("li", { class: "none", text: "No players found" })]),
+        : [
+            el("li", {
+              class: "none",
+              text: query ? "No players found" : "No profiles yet",
+            }),
+          ]),
     );
     $("profileResults").hidden = false;
     highlightResult();
@@ -747,6 +751,7 @@ function wireEvents() {
 
   const search = $("profileSearch");
   search.addEventListener("input", searchPlayers);
+  search.addEventListener("focus", searchPlayers);
   search.addEventListener("blur", closeResults);
   search.addEventListener("keydown", (event) => {
     const count = searchBox.results.length;

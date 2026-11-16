@@ -317,6 +317,15 @@ async function main() {
     JSON.parse((await dispatch(handler, "/api/profiles?q=%25")).body),
     [],
   );
+  // Matches anywhere in the name, and an empty search lists active players.
+  assert.deepStrictEqual(
+    JSON.parse((await dispatch(handler, "/api/profiles?q=lic")).body).map(
+      (p) => p.username,
+    ),
+    ["alice"],
+  );
+  const top = JSON.parse((await dispatch(handler, "/api/profiles")).body);
+  assert(top.length >= 2 && top[0].runs >= top[top.length - 1].runs);
   const aliceId = found[0].id;
   assert.strictEqual(
     JSON.parse(
