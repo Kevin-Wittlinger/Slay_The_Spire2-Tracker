@@ -14,7 +14,17 @@
       <h1>STS2 Tracker</h1>
       <span id="status" role="status" aria-live="polite">Connecting...</span>
       <span class="spacer"></span>
-      <label id="importRunButton" class="btn primary" for="runFiles" hidden
+      <button
+        id="syncButton"
+        type="button"
+        class="primary"
+        hidden>
+        Sync runs
+      </button>
+      <button id="changeFolderButton" type="button" class="link" hidden>
+        Change folder
+      </button>
+      <label id="importRunButton" class="btn" for="runFiles" hidden
         >Import run folder</label
       >
       <input
@@ -117,6 +127,7 @@
       Drop your .run files to import
     </div>
     <script src="trends.js"></script>
+    <script src="sync.js"></script>
     <script src="app.js"></script>
   </body>
 </html>

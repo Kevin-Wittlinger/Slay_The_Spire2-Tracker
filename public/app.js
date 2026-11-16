@@ -738,6 +738,7 @@ function renderScope() {
   $("importRunButton").hidden = !state.me;
   $("runFiles").disabled = !state.me || state.importing;
   $("importRunButton").classList.toggle("disabled", state.importing);
+  updateSyncButtons();
 }
 
 function setView(target, profile) {
@@ -872,15 +873,15 @@ async function importFiles(files) {
   if (!state.me) {
     setStatus("Create a profile or sign in before importing runs.", "warn");
     openAccountPanel("register");
-    return;
+    return false;
   }
-  if (state.importing) return;
+  if (state.importing) return false;
   const runFiles = [...files].filter((file) =>
     file.name.toLowerCase().endsWith(".run"),
   );
   if (!runFiles.length) {
     setStatus("No .run files found in that selection.", "warn");
-    return;
+    return false;
   }
 
   state.importing = true;
@@ -940,11 +941,13 @@ async function importFiles(files) {
     if (totals.invalid) parts.push(`${totals.invalid} invalid`);
     await setView("me");
     setStatus(`Done: ${parts.join(", ")}.`, "live");
+    return true;
   } catch (error) {
     setStatus(
       `Import stopped: ${error.message} (${totals.imported} imported so far)`,
       "warn",
     );
+    return false;
   } finally {
     state.importing = false;
     renderScope();
@@ -962,6 +965,10 @@ function resetFilters() {
 }
 
 function wireEvents() {
+  $("syncButton").addEventListener("click", () => syncRuns());
+  $("changeFolderButton").addEventListener("click", () =>
+    syncRuns({ chooseNew: true }),
+  );
   $("globalScope").addEventListener("click", () => setView("global"));
   $("profileScope").addEventListener("click", () => setView("me"));
   $("otherScope").addEventListener("click", () => setView("global"));

@@ -7,6 +7,7 @@ const { createImporter } = require("../lib/importer");
 const { createHandler } = require("../lib/handler");
 const { createRateLimiter } = require("../lib/ratelimit");
 const { buildTrends } = require("../public/trends");
+const { collectRunFiles } = require("../public/sync");
 const { TABS, runQuery } = require("../db/queries");
 
 function makeRun({
@@ -252,6 +253,33 @@ async function main() {
   assert.strictEqual(pageSource("app.js").split("host.replaceChildren(").length - 1, 1);
   assert.strictEqual(pageSource("trends.js").includes("host.replaceChildren("), false);
   assert.strictEqual(pageSource("trends.js").includes("host.append("), false);
+
+  // Sync: finds .run files in nested folders and skips ones older than the last sync.
+  const fakeFile = (name, lastModified) => ({
+    kind: "file",
+    name,
+    getFile: async () => ({ name, lastModified }),
+  });
+  const fakeDir = (entries) => ({
+    kind: "directory",
+    async *values() {
+      yield* entries;
+    },
+  });
+  const tree = fakeDir([
+    fakeFile("old.run", 1000),
+    fakeFile("new.RUN", 5000),
+    fakeFile("notes.txt", 9000),
+    fakeDir([fakeFile("deep-new.run", 6000), fakeFile("deep-old.run", 10)]),
+  ]);
+  assert.deepStrictEqual(
+    (await collectRunFiles(tree)).map((f) => f.name).sort(),
+    ["deep-new.run", "deep-old.run", "new.RUN", "old.run"],
+  );
+  assert.deepStrictEqual(
+    (await collectRunFiles(tree, 2000)).map((f) => f.name).sort(),
+    ["deep-new.run", "new.RUN"],
+  );
 
   // Trends: one row per run, oldest first, and the page-side math for win rate over time.
   const trendRows = await runQuery(db, "trends", {});

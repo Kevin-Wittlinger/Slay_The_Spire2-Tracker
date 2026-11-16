@@ -88,6 +88,14 @@ the first `x-forwarded-for` entry.
 
 Locally, the database lives at `data/spire-ledger.db`. Production data is stored in Turso.
 
+## Sync runs
+
+Signed-in users get a **Sync runs** button in the top right. The first click asks you to choose your run folder; the
+browser remembers it, and every later click re-scans that folder and uploads only the runs it hasn't sent before
+(**Change folder** picks a different one). This uses the File System Access API, so it works in Chrome and Edge. Brave
+has it turned off by default: open `brave://flags/#file-system-access-api`, set it to Enabled and restart. Firefox and
+Safari don't support it; **Import run folder** works everywhere.
+
 ## Trends
 
 The **Trends** tab has two charts. The top one is your win rate over every run, after each run. The bottom one zooms in
