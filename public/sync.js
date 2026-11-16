@@ -148,8 +148,14 @@ async function syncRuns({ chooseNew = false } = {}) {
     }
   } catch (error) {
     if (error.name === "AbortError") {
-      // picker closed without choosing: put the normal status line back
-      updateStatus().catch(() => {});
+      // Picker closed without choosing a folder. That also happens when the browser refuses
+      // the game's folder, so say why and what to do instead.
+      setStatus(
+        record
+          ? ""
+          : "No folder chosen. If your browser said it can't open the folder: the game keeps runs in AppData, which browsers block. Use the sync tool instead (npm run sync, see the README).",
+      );
+      if (record) updateStatus().catch(() => {});
       updateSyncButtons();
       return;
     }
