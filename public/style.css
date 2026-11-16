@@ -352,8 +352,7 @@ td.num {
 }
 .char-logo {
   display: block;
-  height: 28px;
-  width: auto;
+  max-width: none;
 }
 .char-filter {
   display: flex;
@@ -378,9 +377,6 @@ td.num {
   background: var(--panel-2);
   box-shadow: 0 0 0 1px var(--accent);
   color: var(--text);
-}
-.char-picker .char-logo {
-  height: 26px;
 }
 .pct {
   display: block;

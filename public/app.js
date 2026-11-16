@@ -42,14 +42,17 @@ const FILTERABLE = new Set([
   "choice",
 ]);
 
-// Logo banners in public/img/characters, keyed by the name pretty() produces.
-const CHARACTER_LOGOS = new Set([
-  "defect",
-  "ironclad",
-  "necrobinder",
-  "regent",
-  "silent",
-]);
+// Logo banners in public/img/characters, as [width, height] in CSS pixels.
+// The images are trimmed and scaled so the lettering is the same size in every logo;
+// to add a character, drop in a PNG prepared the same way and add its size here.
+const CHARACTER_LOGOS = {
+  defect: [143, 30],
+  fool: [110, 23],
+  ironclad: [148, 23],
+  necrobinder: [201, 31],
+  regent: [141, 34],
+  silent: [138, 26],
+};
 
 // ---------- helpers ----------
 async function api(path, opts = {}) {
@@ -117,9 +120,12 @@ function characterLogo(value) {
     .replace(/^CHARACTER./, "")
     .replace(/^THE_/, "")
     .toLowerCase();
-  if (!CHARACTER_LOGOS.has(slug)) return null;
+  const size = Object.hasOwn(CHARACTER_LOGOS, slug) ? CHARACTER_LOGOS[slug] : null;
+  if (!size) return null;
   return el("img", {
     class: "char-logo",
+    width: size[0],
+    height: size[1],
     src: `img/characters/${slug}.png`,
     alt: pretty(value),
     title: pretty(value),
