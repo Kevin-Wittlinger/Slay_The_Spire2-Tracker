@@ -389,6 +389,16 @@ td.char-cell {
   box-shadow: 0 0 0 1px var(--accent);
   color: var(--text);
 }
+td.result-win,
+td.result-loss {
+  font-weight: 600;
+}
+td.result-win {
+  color: var(--good);
+}
+td.result-loss {
+  color: var(--bad);
+}
 .pct {
   display: block;
 }

@@ -371,6 +371,8 @@ function renderTable(rows, host) {
             const isPct = /pct$/.test(col) && typeof value === "number";
             if (typeof value === "number") td.className = "num";
             if (col === "character") td.className = "char-cell";
+            if (col === "result" && (value === "WIN" || value === "LOSS"))
+              td.className = value === "WIN" ? "result-win" : "result-loss";
             if (isPct) {
               const good = value >= 50;
               const bar = el("span", { class: `bar ${good ? "good" : "bad"}` });
