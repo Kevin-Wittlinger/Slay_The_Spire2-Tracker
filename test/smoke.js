@@ -177,6 +177,11 @@ async function main() {
     50,
   );
 
+  // Starting relics are left out of relic stats; other relics stay.
+  const relicRows = (await runQuery(db, "relic_win_rate", {})).map((row) => row.relic);
+  assert(!relicRows.includes("RELIC.DIVINE_RIGHT"));
+  assert(relicRows.includes("RELIC.GOLDEN_PEARL"));
+
   const handler = createHandler(db);
   const killedByDb = await openDb(":memory:");
   const killerSamples = [

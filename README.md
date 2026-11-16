@@ -87,5 +87,5 @@ Locally, the database lives at `data/spire-ledger.db`. Production data is stored
 
 - The local development server listens only on your own machine (127.0.0.1). Vercel uses a serverless function.
 - Win rate for a card or relic means: of the runs that ended with it, the share that were wins.
-  Starter cards are left out of card stats. Small samples are noisy, so raise "Min sample".
+  Starter cards and starting relics are left out of card and relic stats. Small samples are noisy, so raise "Min sample".
 - Event queries still exist in `db/queries.js` but are hidden from the site.

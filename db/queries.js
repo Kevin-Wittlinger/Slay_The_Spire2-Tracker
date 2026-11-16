@@ -10,6 +10,17 @@ const PROFILE_FILTER = `(@profileId IS NULL OR EXISTS (
 ))`;
 const BASE = `r.abandoned = 0 AND ${FILTER} AND ${PROFILE_FILTER}`;
 
+// Every character begins with one of these, so they say nothing about a run. Left out of relic stats.
+const STARTING_RELICS = [
+  "RELIC.BURNING_BLOOD",
+  "RELIC.RING_OF_THE_SNAKE",
+  "RELIC.DIVINE_RIGHT",
+  "RELIC.BOUND_PHYLACTERY",
+  "RELIC.CRACKED_CORE",
+  "RELIC.SONG_BOW",
+];
+const STARTING_RELIC_LIST = STARTING_RELICS.map((id) => `'${id}'`).join(", ");
+
 const TABS = {
   overview: {
     title: "Overview",
@@ -109,7 +120,7 @@ const TABS = {
         SELECT DISTINCT x.run_id, x.relic_id AS relic, r.win
         FROM run_relics x
         JOIN runs r ON r.run_id = x.run_id
-        WHERE ${BASE}
+        WHERE x.relic_id NOT IN (${STARTING_RELIC_LIST}) AND ${BASE}
       )
       GROUP BY relic
       HAVING runs >= @min
