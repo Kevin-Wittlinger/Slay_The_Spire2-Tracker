@@ -121,6 +121,25 @@ nav button.on {
 .controls input {
   width: 70px;
 }
+.table-filters {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+.table-filter {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--dim);
+  font-size: 12px;
+  text-transform: capitalize;
+}
+.table-filter select {
+  min-width: 120px;
+  max-width: min(240px, 60vw);
+}
 table {
   width: 100%;
   border-collapse: collapse;

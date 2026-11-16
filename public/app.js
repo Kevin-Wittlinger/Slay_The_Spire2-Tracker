@@ -47,7 +47,23 @@ function renderTable(rows, host) {
     return;
   }
   const cols = Object.keys(rows[0]);
-  let data = rows.map((r) => cols.map((c) => r[c]));
+  const data = rows.map((r) => cols.map((c) => r[c]));
+  const filterableColumns = new Set([
+    "character",
+    "ascension",
+    "card",
+    "relic",
+    "type",
+    "encounter",
+    "killed_by",
+    "result",
+    "source",
+    "event",
+    "choice",
+  ]);
+  const selectedFilters = new Map();
+  const filters = document.createElement("div");
+  filters.className = "table-filters";
   let sortCol = -1,
     asc = false;
   const table = document.createElement("table");
@@ -55,8 +71,20 @@ function renderTable(rows, host) {
     body = document.createElement("tbody");
   const hr = document.createElement("tr");
   const draw = () => {
+    const visible = data.filter((row) =>
+      [...selectedFilters].every(
+        ([column, value]) => String(row[column]) === value,
+      ),
+    );
+    if (sortCol >= 0) {
+      visible.sort(
+        (a, b) =>
+          (a[sortCol] > b[sortCol] ? 1 : a[sortCol] < b[sortCol] ? -1 : 0) *
+          (asc ? 1 : -1),
+      );
+    }
     body.innerHTML = "";
-    for (const row of data) {
+    for (const row of visible) {
       const tr = document.createElement("tr");
       row.forEach((v, i) => {
         const td = document.createElement("td");
@@ -75,17 +103,45 @@ function renderTable(rows, host) {
     th.onclick = () => {
       asc = sortCol === i ? !asc : false;
       sortCol = i;
-      data.sort(
-        (a, b) => (a[i] > b[i] ? 1 : a[i] < b[i] ? -1 : 0) * (asc ? 1 : -1),
-      );
       draw();
     };
     hr.appendChild(th);
+
+    if (!filterableColumns.has(c)) return;
+    const values = [...new Set(data.map((row) => row[i]).filter((v) => v != null))];
+    if (values.length < 2) return;
+    values.sort((a, b) =>
+      typeof a === "number" && typeof b === "number"
+        ? a - b
+        : String(a).localeCompare(String(b)),
+    );
+    const label = document.createElement("label");
+    label.className = "table-filter";
+    label.append(document.createTextNode(`${c.replace(/_/g, " ")} `));
+    const select = document.createElement("select");
+    const all = document.createElement("option");
+    all.value = "";
+    all.textContent = "All";
+    select.appendChild(all);
+    for (const value of values) {
+      const option = document.createElement("option");
+      option.value = String(value);
+      option.textContent = pretty(String(value));
+      select.appendChild(option);
+    }
+    select.addEventListener("change", () => {
+      if (select.value) selectedFilters.set(i, select.value);
+      else selectedFilters.delete(i);
+      draw();
+    });
+    label.appendChild(select);
+    filters.appendChild(label);
   });
   thead.appendChild(hr);
   table.append(thead, body);
   draw();
   host.innerHTML = "";
+  if (filters.childElementCount) host.appendChild(filters);
   host.appendChild(table);
 }
 
