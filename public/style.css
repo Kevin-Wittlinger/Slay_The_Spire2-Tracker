@@ -354,6 +354,10 @@ td.num {
 td.char-cell {
   width: 1%;
 }
+.asc-icon {
+  display: block;
+  max-width: none;
+}
 .char-logo {
   display: block;
   max-width: none;

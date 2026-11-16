@@ -83,6 +83,12 @@ the first `x-forwarded-for` entry.
 
 Locally, the database lives at `data/spire-ledger.db`. Production data is stored in Turso.
 
+## Icons
+
+Character logos live in `public/img/characters/` and ascension flames (levels 0-10) in `public/img/ascension/`.
+They replace the plain text in tables. Anything without an icon, such as a new character or an ascension above 10,
+falls back to text.
+
 ## Notes
 
 - The local development server listens only on your own machine (127.0.0.1). Vercel uses a serverless function.

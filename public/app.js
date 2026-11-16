@@ -63,6 +63,12 @@ const CHARACTER_LOGOS = {
   silent: [121, 23],
 };
 
+// Flame icons for ascension levels 0-10 (public/img/ascension/<level>.png, 31x46 source),
+// drawn at [width, height] CSS pixels. Other levels fall back to plain text.
+const ASCENSION_MAX = 10;
+const ASCENSION_SIZE = [23, 34];
+const ASCENSION_COLUMNS = new Set(["ascension", "max_ascension"]);
+
 // The filter-row logos are drawn smaller so all characters fit on one line.
 const PICKER_SCALE = 0.7;
 
@@ -168,6 +174,20 @@ function characterLogo(value, scale = 1) {
     src: `img/characters/${slug}.png`,
     alt: pretty(value),
     title: pretty(value),
+    loading: "lazy",
+  });
+}
+
+function ascensionIcon(value) {
+  if (!Number.isInteger(value) || value < 0 || value > ASCENSION_MAX)
+    return null;
+  return el("img", {
+    class: "asc-icon",
+    src: `img/ascension/${value}.png`,
+    alt: `Ascension ${value}`,
+    title: `Ascension ${value}`,
+    width: ASCENSION_SIZE[0],
+    height: ASCENSION_SIZE[1],
     loading: "lazy",
   });
 }
@@ -404,7 +424,12 @@ function renderTable(rows, host) {
                 bar,
               );
             } else {
-              const logo = col === "character" ? characterLogo(value) : null;
+              const logo =
+                col === "character"
+                  ? characterLogo(value)
+                  : ASCENSION_COLUMNS.has(col)
+                    ? ascensionIcon(value)
+                    : null;
               if (logo) td.append(logo);
               else td.textContent = formatCell(value, col);
             }
