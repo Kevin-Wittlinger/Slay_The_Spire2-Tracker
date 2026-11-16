@@ -27,6 +27,15 @@ const COLUMN_LABELS = {
   run_wins: "Run wins",
 };
 
+// Tabs whose default order is alphabetical, and the column they sort by.
+const ALPHABETICAL_TABS = {
+  card_win_rate: "card",
+  card_pick_rate: "card",
+  relic_win_rate: "relic",
+  encounters: "encounter",
+  killed_by: "killed_by",
+};
+
 // Columns that get a dropdown filter above the table.
 // (Character is left out: the logo row at the top already filters every tab.)
 const FILTERABLE = new Set([
@@ -303,12 +312,18 @@ function viewLabel() {
 }
 
 // ---------- table ----------
+// Compares by the name shown on screen ("Black Hole"), not the raw id ("CARD.BLACK_HOLE").
+const collator = new Intl.Collator(undefined, {
+  numeric: true,
+  sensitivity: "base",
+});
+
 function compareValues(a, b) {
   if (a === b) return 0;
   if (a === null || a === undefined) return 1;
   if (b === null || b === undefined) return -1;
   if (typeof a === "number" && typeof b === "number") return a - b;
-  return String(a).localeCompare(String(b));
+  return collator.compare(String(pretty(a)), String(pretty(b)));
 }
 
 function emptyMessage() {
@@ -336,6 +351,8 @@ function renderTable(rows, host) {
   let sortCol = -1;
   let ascending = false;
   let search = "";
+  // Default order: alphabetical on some tabs, otherwise the order the server sent.
+  const defaultCol = cols.indexOf(ALPHABETICAL_TABS[state.tab]);
 
   const tbody = el("tbody");
   const count = el("span", { class: "row-count" });
@@ -353,6 +370,8 @@ function renderTable(rows, host) {
       visible.sort(
         (a, b) => compareValues(a[sortCol], b[sortCol]) * (ascending ? 1 : -1),
       );
+    } else if (defaultCol >= 0) {
+      visible.sort((a, b) => compareValues(a[defaultCol], b[defaultCol]));
     }
     headerCells.forEach((th, i) => {
       th.setAttribute(
@@ -416,9 +435,18 @@ function renderTable(rows, host) {
   const headRow = el("tr");
   cols.forEach((col, i) => {
     const th = el("th", { scope: "col", tabindex: "0", text: columnLabel(col) });
+    // Clicking cycles: first direction -> opposite direction -> back to default order.
+    // Text starts A-Z; numbers start highest first.
+    const firstAscending = typeof data.find((row) => row[i] != null)?.[i] === "string";
     const sort = () => {
-      ascending = sortCol === i ? !ascending : typeof data[0][i] === "string";
-      sortCol = i;
+      if (sortCol !== i) {
+        sortCol = i;
+        ascending = firstAscending;
+      } else if (ascending === firstAscending) {
+        ascending = !firstAscending;
+      } else {
+        sortCol = -1; // third click: default order
+      }
       draw();
     };
     th.addEventListener("click", sort);
