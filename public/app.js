@@ -108,8 +108,15 @@ function renderTable(rows, host) {
     hr.appendChild(th);
 
     if (!filterableColumns.has(c)) return;
-    const values = [...new Set(data.map((row) => row[i]).filter((v) => v != null))];
-    if (values.length < 2) return;
+    const fixedValues =
+      curTab === "killed_by" && c === "type"
+        ? ["Regular combat", "Elite", "Boss", "Other"]
+        : null;
+    const values =
+      fixedValues || [
+        ...new Set(data.map((row) => row[i]).filter((v) => v != null)),
+      ];
+    if (!fixedValues && values.length < 2) return;
     values.sort((a, b) =>
       typeof a === "number" && typeof b === "number"
         ? a - b

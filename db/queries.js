@@ -182,10 +182,24 @@ const TABS = {
     title: "Killed by",
     sql: `
       SELECT r.killed_by,
+             CASE f.type
+               WHEN 'monster' THEN 'Regular combat'
+               WHEN 'elite' THEN 'Elite'
+               WHEN 'boss' THEN 'Boss'
+               ELSE 'Other'
+             END AS type,
              COUNT(*) AS deaths
       FROM runs r
+      LEFT JOIN fights f
+        ON f.run_id = r.run_id
+        AND f.encounter_id = r.killed_by
+        AND f.floor = (
+          SELECT MAX(f2.floor)
+          FROM fights f2
+          WHERE f2.run_id = r.run_id AND f2.encounter_id = r.killed_by
+        )
       WHERE r.win = 0 AND r.killed_by IS NOT NULL AND ${BASE}
-      GROUP BY r.killed_by
+      GROUP BY r.killed_by, f.type
       ORDER BY deaths DESC`,
   },
 
