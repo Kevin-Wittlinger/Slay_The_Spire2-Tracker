@@ -350,6 +350,38 @@ th[aria-sort="descending"]::after {
 td.num {
   font-variant-numeric: tabular-nums;
 }
+.char-logo {
+  display: block;
+  height: 28px;
+  width: auto;
+}
+.char-filter {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+.char-picker {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.char-picker button {
+  display: inline-flex;
+  align-items: center;
+  min-height: 38px;
+  padding: 4px 10px;
+  color: var(--dim);
+}
+.char-picker button[aria-pressed="true"] {
+  border-color: var(--accent);
+  background: var(--panel-2);
+  box-shadow: 0 0 0 1px var(--accent);
+  color: var(--text);
+}
+.char-picker .char-logo {
+  height: 26px;
+}
 .pct {
   display: block;
 }

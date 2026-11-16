@@ -12,6 +12,8 @@ const MIME = {
   ".js": "text/javascript",
   ".css": "text/css",
   ".svg": "image/svg+xml",
+  ".jpg": "image/jpeg",
+  ".png": "image/png",
 };
 
 const SECURITY_HEADERS = {

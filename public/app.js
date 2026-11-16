@@ -8,6 +8,7 @@ const state = {
   tab: "characters",
   me: null, // signed-in profile {id, username} or null
   view: { scope: "global", profile: null }, // whose runs are shown
+  characters: [], // character ids available in the current view
   accountMode: "login",
   importing: false,
   loadId: 0, // guards against out-of-order responses
@@ -39,6 +40,15 @@ const FILTERABLE = new Set([
   "source",
   "event",
   "choice",
+]);
+
+// Logo banners in public/img/characters, keyed by the name pretty() produces.
+const CHARACTER_LOGOS = new Set([
+  "defect",
+  "ironclad",
+  "necrobinder",
+  "regent",
+  "silent",
 ]);
 
 // ---------- helpers ----------
@@ -98,6 +108,70 @@ function pretty(value) {
       return match ? titleCase(match[1]) : part;
     })
     .join(" > ");
+}
+
+// An <img> for a known character id (e.g. "CHARACTER.THE_SILENT"), else null.
+function characterLogo(value) {
+  if (typeof value !== "string") return null;
+  const slug = value
+    .replace(/^CHARACTER./, "")
+    .replace(/^THE_/, "")
+    .toLowerCase();
+  if (!CHARACTER_LOGOS.has(slug)) return null;
+  return el("img", {
+    class: "char-logo",
+    src: `img/characters/${slug}.png`,
+    alt: pretty(value),
+    title: pretty(value),
+    loading: "lazy",
+  });
+}
+
+// Row of clickable logo buttons (plus "All") that stands in for a dropdown.
+// onChange receives the character id, or "" for All.
+function createCharacterPicker(values, current, onChange) {
+  const group = el("div", {
+    class: "char-picker",
+    role: "group",
+    "aria-label": "Character",
+  });
+  const buttons = [];
+  const select = (value) =>
+    buttons.forEach((button) =>
+      button.setAttribute("aria-pressed", String(button.dataset.value === value)),
+    );
+  const add = (value, content) => {
+    const button = el(
+      "button",
+      {
+        type: "button",
+        "data-value": value,
+        "aria-pressed": "false",
+        title: value ? pretty(value) : "All characters",
+      },
+      content,
+    );
+    button.addEventListener("click", () => {
+      select(value);
+      onChange(value);
+    });
+    buttons.push(button);
+    group.append(button);
+  };
+  add("", "All");
+  for (const value of values) add(value, characterLogo(value) || pretty(value));
+  select(current);
+  return group;
+}
+
+function renderCharacterPicker() {
+  if (!state.characters.includes($("fChar").value)) $("fChar").value = "";
+  $("charPicker").replaceChildren(
+    createCharacterPicker(state.characters, $("fChar").value, (value) => {
+      $("fChar").value = value;
+      refreshStats();
+    }),
+  );
 }
 
 function columnLabel(name) {
@@ -271,7 +345,9 @@ function renderTable(rows, host) {
                 bar,
               );
             } else {
-              td.textContent = formatCell(value, col);
+              const logo = col === "character" ? characterLogo(value) : null;
+              if (logo) td.append(logo);
+              else td.textContent = formatCell(value, col);
             }
             return td;
           }),
@@ -326,6 +402,16 @@ function renderTable(rows, host) {
         compareValues,
       );
     if (!fixed && values.length < 2) return;
+    if (col === "character") {
+      toolbar.append(
+        createCharacterPicker(values, "", (value) => {
+          if (value) selected.set(i, value);
+          else selected.delete(i);
+          draw();
+        }),
+      );
+      return;
+    }
     const select = el(
       "select",
       { "aria-label": `Filter by ${columnLabel(col)}` },
@@ -404,12 +490,8 @@ function fillSelect(select, values, labelFor, allLabel) {
 
 async function fillFilters() {
   const filters = await api(`/api/filters?${scopeParams()}`);
-  fillSelect(
-    $("fChar"),
-    filters.characters,
-    pretty,
-    "All characters",
-  );
+  state.characters = filters.characters;
+  renderCharacterPicker();
   fillSelect(
     $("fAsc"),
     filters.ascensions,
@@ -734,6 +816,7 @@ async function downloadBackup() {
 // ---------- startup ----------
 function resetFilters() {
   $("fChar").value = "";
+  renderCharacterPicker();
   $("fAsc").value = "";
   $("fMin").value = 1;
   refreshStats();
@@ -755,7 +838,6 @@ function wireEvents() {
   $("signOutButton").addEventListener("click", signOut);
 
   const onFilter = () => refreshStats();
-  $("fChar").addEventListener("change", onFilter);
   $("fAsc").addEventListener("change", onFilter);
   $("fMin").addEventListener("input", debounce(onFilter, 300));
   $("resetFilters").addEventListener("click", resetFilters);
@@ -866,7 +948,10 @@ async function main() {
   renderScope();
   renderTabs();
   await fillFilters().catch(() => {});
-  if (character) $("fChar").value = character;
+  if (character) {
+    $("fChar").value = character;
+    renderCharacterPicker();
+  }
   if (ascension) $("fAsc").value = ascension;
   await refresh();
 }
