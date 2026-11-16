@@ -1,9 +1,14 @@
 const $ = (id) => document.getElementById(id);
 let tabs = [],
   curTab = "characters";
+let currentScope = "global";
+let currentProfile = null;
+let accountMode = "login";
 
 async function api(path, opts) {
-  const r = await fetch(path, opts);
+  const headers = { ...(opts?.headers || {}) };
+  if (opts?.body !== undefined) headers["Content-Type"] ||= "application/json";
+  const r = await fetch(path, { ...opts, headers });
   const body = await r.json();
   if (!r.ok) throw new Error(body.error || r.statusText);
   return body;
@@ -26,6 +31,7 @@ const qs = () => {
   if ($("fChar").value) p.set("character", $("fChar").value);
   if ($("fAsc").value) p.set("ascension", $("fAsc").value);
   p.set("min", $("fMin").value || 1);
+  p.set("scope", currentScope);
   return p.toString();
 };
 
@@ -37,7 +43,7 @@ function authHeaders() {
 function renderTable(rows, host) {
   if (!rows.length) {
     host.innerHTML =
-      '<div class="empty">No data yet. Import a folder of .run files to begin.</div>';
+      '<div class="empty">No runs in this view yet. Import a folder of .run files to add your runs.</div>';
     return;
   }
   const cols = Object.keys(rows[0]);
@@ -158,9 +164,33 @@ async function fillFilters() {
 }
 
 async function updateStatus() {
-  const s = await api("/api/status");
-  $("status").textContent = `${s.runs} runs in ledger`;
+  const s = await api(`/api/status?scope=${currentScope}`);
+  $("status").textContent =
+    currentScope === "profile"
+      ? `${s.runs} runs in ${currentProfile.username}'s profile`
+      : `${s.runs} runs in combined database`;
   $("status").className = "";
+}
+
+function renderProfileControls() {
+  $("profileLabel").textContent = currentProfile
+    ? `Signed in as ${currentProfile.username}`
+    : "Combined public stats";
+  $("profileScope").disabled = !currentProfile;
+  $("globalScope").className = currentScope === "global" ? "on" : "";
+  $("profileScope").className = currentScope === "profile" ? "on" : "";
+  $("accountButton").hidden = Boolean(currentProfile);
+  $("signOutButton").hidden = !currentProfile;
+}
+
+function setAccountMode(mode) {
+  accountMode = mode;
+  $("accountSubmit").textContent =
+    mode === "register" ? "Create profile" : "Sign in";
+  $("accountMode").textContent =
+    mode === "register" ? "I already have a profile" : "Create a profile";
+  $("accountPassword").autocomplete =
+    mode === "register" ? "new-password" : "current-password";
 }
 
 async function refresh() {
@@ -169,6 +199,12 @@ async function refresh() {
 }
 
 async function importDropped(files) {
+  if (!currentProfile) {
+    $("status").textContent =
+      "Create a profile or sign in before importing runs.";
+    $("status").className = "warn";
+    return;
+  }
   const runFiles = [...files].filter((file) =>
     file.name.toLowerCase().endsWith(".run"),
   );
@@ -178,7 +214,6 @@ async function importDropped(files) {
   }
 
   const totals = { imported: 0, duplicate: 0, multiplayer: 0, invalid: 0 };
-  const headers = authHeaders();
   const maxBatchBytes = 3 * 1024 * 1024;
   let batch = [],
     batchBytes = 2,
@@ -188,7 +223,6 @@ async function importDropped(files) {
     if (!batch.length) return;
     const result = await api("/api/import", {
       method: "POST",
-      headers,
       body: JSON.stringify(batch),
     });
     for (const key of Object.keys(totals)) totals[key] += result[key];
@@ -230,6 +264,10 @@ async function importDropped(files) {
 }
 
 async function main() {
+  const me = await api("/api/me");
+  currentProfile = me.profile;
+  renderProfileControls();
+  setAccountMode("login");
   tabs = await api("/api/tabs");
   renderTabs();
   await refresh();
@@ -239,6 +277,58 @@ async function main() {
       renderView();
     }),
   );
+  $("globalScope").addEventListener("click", () => {
+    currentScope = "global";
+    renderProfileControls();
+    refresh();
+  });
+  $("profileScope").addEventListener("click", () => {
+    if (!currentProfile) return;
+    currentScope = "profile";
+    renderProfileControls();
+    refresh();
+  });
+  $("accountButton").addEventListener("click", () => {
+    $("accountPanel").hidden = !$("accountPanel").hidden;
+    $("accountMessage").textContent = "";
+  });
+  $("accountMode").addEventListener("click", () => {
+    setAccountMode(accountMode === "login" ? "register" : "login");
+    $("accountMessage").textContent = "";
+  });
+  $("accountForm").addEventListener("submit", async (event) => {
+    event.preventDefault();
+    $("accountMessage").textContent = "Working...";
+    try {
+      const result = await api(`/api/${accountMode}`, {
+        method: "POST",
+        body: JSON.stringify({
+          username: $("accountUsername").value,
+          password: $("accountPassword").value,
+        }),
+      });
+      currentProfile = result.profile;
+      currentScope = "profile";
+      $("accountPassword").value = "";
+      $("accountPanel").hidden = true;
+      renderProfileControls();
+      await refresh();
+    } catch (error) {
+      $("accountMessage").textContent = error.message;
+    }
+  });
+  $("signOutButton").addEventListener("click", async () => {
+    try {
+      await api("/api/logout", { method: "POST" });
+      currentProfile = null;
+      currentScope = "global";
+      renderProfileControls();
+      await refresh();
+    } catch (error) {
+      $("status").textContent = error.message;
+      $("status").className = "warn";
+    }
+  });
   const runFiles = $("runFiles");
   runFiles.addEventListener("change", () => {
     importDropped(runFiles.files);

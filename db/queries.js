@@ -5,7 +5,10 @@ const { rowsToObjects } = require("../lib/db");
 
 const FILTER = `(@character IS NULL OR r.character = @character)
   AND (@ascension IS NULL OR r.ascension = @ascension)`;
-const BASE = `r.abandoned = 0 AND ${FILTER}`;
+const PROFILE_FILTER = `(@profileId IS NULL OR EXISTS (
+  SELECT 1 FROM profile_runs pr WHERE pr.run_id = r.run_id AND pr.profile_id = @profileId
+))`;
+const BASE = `r.abandoned = 0 AND ${FILTER} AND ${PROFILE_FILTER}`;
 
 const TABS = {
   overview: {
@@ -195,7 +198,7 @@ const TABS = {
              ROUND(r.run_time / 60.0, 1) AS minutes,
              (SELECT COUNT(*) FROM fights f WHERE f.run_id = r.run_id) AS fights
       FROM runs r
-      WHERE r.abandoned = 0 AND ${FILTER}
+      WHERE r.abandoned = 0 AND ${FILTER} AND ${PROFILE_FILTER}
       ORDER BY r.start_time DESC
       LIMIT 100`,
   },

@@ -101,12 +101,15 @@ function createResponse() {
   };
 }
 
-async function dispatch(handler, url, method = "GET", body, token) {
+async function dispatch(handler, url, method = "GET", body, token, cookie) {
   const chunks = body === undefined ? [] : [Buffer.from(JSON.stringify(body))];
   const req = Readable.from(chunks);
   req.url = url;
   req.method = method;
-  req.headers = token ? { authorization: `Bearer ${token}` } : {};
+  req.headers = {
+    ...(token ? { authorization: `Bearer ${token}` } : {}),
+    ...(cookie ? { cookie } : {}),
+  };
   const res = createResponse();
   await handler(req, res);
   return res;
@@ -115,16 +118,22 @@ async function dispatch(handler, url, method = "GET", body, token) {
 async function main() {
   const db = await openDb(":memory:");
   const importer = createImporter(db);
+  const profile = await db.execute({
+    sql: "INSERT INTO profiles (username, password_salt, password_hash, created_at) VALUES (?,?,?,?)",
+    args: ["tester", "salt", "hash", Date.now()],
+  });
+  const profileId = Number(profile.lastInsertRowid);
   assert.strictEqual(
-    (await importer.importRun(makeRun({ seed: "A" }))).status,
+    (await importer.importRun(makeRun({ seed: "A" }), profileId)).status,
     "imported",
   );
   assert.strictEqual(
-    (await importer.importRun(makeRun({ seed: "A" }))).status,
+    (await importer.importRun(makeRun({ seed: "A" }), profileId)).status,
     "duplicate",
   );
   assert.strictEqual(
-    (await importer.importRun(makeRun({ seed: "B", players: 2 }))).status,
+    (await importer.importRun(makeRun({ seed: "B", players: 2 }), profileId))
+      .status,
     "multiplayer",
   );
   assert.strictEqual(
@@ -135,6 +144,7 @@ async function main() {
     (
       await importer.importRun(
         makeRun({ seed: "C", win: true, start: 1794600000 }),
+        profileId,
       )
     ).status,
     "imported",
@@ -172,17 +182,82 @@ async function main() {
       .status,
     401,
   );
+  const registered = await dispatch(handler, "/api/register", "POST", {
+    username: "alice",
+    password: "a-secure-test-password",
+  });
+  assert.strictEqual(registered.status, 200);
+  const aliceCookie = registered.headers["Set-Cookie"].split(";")[0];
+  const me = await dispatch(
+    handler,
+    "/api/me",
+    "GET",
+    undefined,
+    undefined,
+    aliceCookie,
+  );
+  assert.strictEqual(JSON.parse(me.body).profile.username, "alice");
+  assert.strictEqual(
+    (
+      await dispatch(handler, "/api/register", "POST", {
+        username: "Alice",
+        password: "another-secure-password",
+      })
+    ).status,
+    409,
+  );
   const imported = await dispatch(
     handler,
     "/api/import",
     "POST",
     [makeRun({ seed: "D" })],
-    process.env.IMPORT_TOKEN,
+    undefined,
+    aliceCookie,
   );
   assert.strictEqual(imported.status, 200);
   assert.strictEqual(JSON.parse(imported.body).imported, 1);
+  const repeated = await dispatch(
+    handler,
+    "/api/import",
+    "POST",
+    [makeRun({ seed: "D" })],
+    undefined,
+    aliceCookie,
+  );
+  assert.strictEqual(JSON.parse(repeated.body).duplicate, 1);
+  assert.strictEqual(
+    (await dispatch(handler, "/api/stats/overview?scope=profile")).status,
+    401,
+  );
+  assert.strictEqual(
+    JSON.parse(
+      (
+        await dispatch(
+          handler,
+          "/api/stats/overview?scope=profile",
+          "GET",
+          undefined,
+          undefined,
+          aliceCookie,
+        )
+      ).body,
+    )[0].runs,
+    1,
+  );
+  assert.strictEqual(
+    (await importer.importRun(makeRun({ seed: "D" }), profileId)).status,
+    "imported",
+  );
+  assert.strictEqual(
+    (await importer.importRun(makeRun({ seed: "D" }), profileId)).status,
+    "duplicate",
+  );
   const status = await dispatch(handler, "/api/index?route=status");
   assert.strictEqual(JSON.parse(status.body).runs, 3);
+  assert.strictEqual(
+    (await runQuery(db, "overview", { profileId }))[0].runs,
+    3,
+  );
   assert.strictEqual(
     (await dispatch(handler, "/api/sql", "POST", { sql: "SELECT * FROM runs" }))
       .status,

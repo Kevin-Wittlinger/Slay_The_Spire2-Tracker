@@ -13,6 +13,27 @@ CREATE TABLE IF NOT EXISTS runs (
   build_id    TEXT
 );
 
+CREATE TABLE IF NOT EXISTS profiles (
+  profile_id    INTEGER PRIMARY KEY AUTOINCREMENT,
+  username      TEXT NOT NULL COLLATE NOCASE UNIQUE,
+  password_salt TEXT NOT NULL,
+  password_hash TEXT NOT NULL,
+  created_at    INTEGER NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS profile_sessions (
+  token_hash TEXT PRIMARY KEY,
+  profile_id INTEGER NOT NULL REFERENCES profiles(profile_id) ON DELETE CASCADE,
+  expires_at INTEGER NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS profile_runs (
+  profile_id INTEGER NOT NULL REFERENCES profiles(profile_id) ON DELETE CASCADE,
+  run_id     TEXT NOT NULL REFERENCES runs(run_id) ON DELETE CASCADE,
+  created_at INTEGER NOT NULL,
+  PRIMARY KEY (profile_id, run_id)
+);
+
 -- Final deck of each run (upgrade level, and the floor the card was added).
 CREATE TABLE IF NOT EXISTS run_cards (
   run_id      TEXT NOT NULL REFERENCES runs(run_id) ON DELETE CASCADE,
@@ -69,3 +90,5 @@ CREATE INDEX IF NOT EXISTS idx_fights_enc    ON fights(encounter_id);
 CREATE INDEX IF NOT EXISTS idx_fights_run    ON fights(run_id);
 CREATE INDEX IF NOT EXISTS idx_events_event  ON events(event_id);
 CREATE INDEX IF NOT EXISTS idx_events_run    ON events(run_id);
+CREATE INDEX IF NOT EXISTS idx_profile_sessions_expiry ON profile_sessions(expires_at);
+CREATE INDEX IF NOT EXISTS idx_profile_runs_run ON profile_runs(run_id);

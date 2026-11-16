@@ -163,3 +163,101 @@ code {
   color: var(--bad);
   white-space: pre-wrap;
 }
+.profile-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 20px;
+  border-bottom: 1px solid var(--line);
+}
+.scope-switch {
+  display: flex;
+  gap: 4px;
+}
+.scope-switch button.on {
+  color: #14161c;
+  background: var(--accent);
+  border-color: var(--accent);
+}
+.profile-bar #profileLabel {
+  color: var(--dim);
+}
+.profile-bar button:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+.account-panel {
+  padding: 12px 20px;
+  border-bottom: 1px solid var(--line);
+}
+#accountForm {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: end;
+  gap: 8px;
+}
+#accountForm label {
+  display: grid;
+  gap: 4px;
+  color: var(--dim);
+}
+#accountMessage {
+  flex-basis: 100%;
+}
+@media (max-width: 640px) {
+  .profile-bar {
+    padding-inline: 12px;
+  }
+  #accountForm label,
+  #accountForm input {
+    width: 100%;
+  }
+}
+.profile-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 20px;
+  border-bottom: 1px solid var(--line);
+}
+.scope-switch {
+  display: flex;
+  gap: 4px;
+}
+.scope-switch button.on {
+  color: #14161c;
+  background: var(--accent);
+  border-color: var(--accent);
+}
+#profileLabel {
+  color: var(--dim);
+}
+.account-panel {
+  padding: 12px 20px;
+  border-bottom: 1px solid var(--line);
+}
+#accountForm {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: end;
+  gap: 8px;
+}
+#accountForm label {
+  display: grid;
+  gap: 4px;
+  color: var(--dim);
+}
+#accountMessage {
+  flex-basis: 100%;
+}
+@media (max-width: 640px) {
+  .profile-bar {
+    padding-inline: 12px;
+  }
+  #accountForm label,
+  #accountForm input {
+    width: 100%;
+  }
+}

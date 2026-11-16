@@ -23,11 +23,49 @@
       <input
         id="importToken"
         type="password"
-        placeholder="Import key"
-        aria-label="Import key"
+        placeholder="Admin key"
+        aria-label="Admin key"
         autocomplete="off" />
       <button id="dbDownload" type="button">Download backup</button>
     </header>
+
+    <section class="profile-bar">
+      <div class="scope-switch" aria-label="Statistics scope">
+        <button id="globalScope" class="on" type="button">Everyone</button>
+        <button id="profileScope" type="button" disabled>My profile</button>
+      </div>
+      <span id="profileLabel">Combined public stats</span>
+      <span class="spacer"></span>
+      <button id="accountButton" type="button">Sign in / create profile</button>
+      <button id="signOutButton" type="button" hidden>Sign out</button>
+    </section>
+
+    <section id="accountPanel" class="account-panel" hidden>
+      <form id="accountForm">
+        <label
+          >Username
+          <input
+            id="accountUsername"
+            autocomplete="username"
+            minlength="3"
+            maxlength="24"
+            required
+        /></label>
+        <label
+          >Password
+          <input
+            id="accountPassword"
+            type="password"
+            autocomplete="current-password"
+            minlength="10"
+            maxlength="128"
+            required
+        /></label>
+        <button id="accountSubmit" type="submit">Sign in</button>
+        <button id="accountMode" type="button">Create a profile</button>
+        <span id="accountMessage" class="hint" role="status"></span>
+      </form>
+    </section>
 
     <main>
       <div class="controls">
