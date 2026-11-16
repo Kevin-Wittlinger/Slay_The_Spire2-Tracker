@@ -28,8 +28,8 @@ const COLUMN_LABELS = {
 };
 
 // Columns that get a dropdown filter above the table.
+// (Character is left out: the logo row at the top already filters every tab.)
 const FILTERABLE = new Set([
-  "character",
   "ascension",
   "card",
   "relic",
@@ -53,6 +53,9 @@ const CHARACTER_LOGOS = {
   regent: [124, 30],
   silent: [121, 23],
 };
+
+// The filter-row logos are drawn smaller so all characters fit on one line.
+const PICKER_SCALE = 0.7;
 
 // Characters always appear in this order wherever they are listed.
 const CHARACTER_ORDER = [
@@ -144,15 +147,15 @@ function pretty(value) {
 }
 
 // An <img> for a known character id (e.g. "CHARACTER.THE_SILENT"), else null.
-function characterLogo(value) {
+function characterLogo(value, scale = 1) {
   if (typeof value !== "string") return null;
   const slug = characterSlug(value);
   const size = Object.hasOwn(CHARACTER_LOGOS, slug) ? CHARACTER_LOGOS[slug] : null;
   if (!size) return null;
   return el("img", {
     class: "char-logo",
-    width: size[0],
-    height: size[1],
+    width: Math.round(size[0] * scale),
+    height: Math.round(size[1] * scale),
     src: `img/characters/${slug}.png`,
     alt: pretty(value),
     title: pretty(value),
@@ -193,7 +196,7 @@ function createCharacterPicker(values, current, onChange) {
   };
   add("", "All");
   for (const value of sortCharacters(values))
-    add(value, characterLogo(value) || pretty(value));
+    add(value, characterLogo(value, PICKER_SCALE) || pretty(value));
   select(current);
   return group;
 }
@@ -437,16 +440,6 @@ function renderTable(rows, host) {
         compareValues,
       );
     if (!fixed && values.length < 2) return;
-    if (col === "character") {
-      toolbar.append(
-        createCharacterPicker(values, "", (value) => {
-          if (value) selected.set(i, value);
-          else selected.delete(i);
-          draw();
-        }),
-      );
-      return;
-    }
     const select = el(
       "select",
       { "aria-label": `Filter by ${columnLabel(col)}` },
