@@ -284,6 +284,7 @@ function writeHash() {
   if ($("fAsc").value) params.set("ascension", $("fAsc").value);
   if ($("fPatch").value) params.set("patch", $("fPatch").value);
   if (Number($("fMin").value) > 1) params.set("min", $("fMin").value);
+  if (trendsState.mode === "split") params.set("trend", "split");
   history.replaceState(null, "", `#${params}`);
 }
 
@@ -291,6 +292,7 @@ function readHash() {
   const params = new URLSearchParams(location.hash.slice(1));
   const initial = { filters: {} };
   if (params.get("tab")) initial.tab = params.get("tab");
+  if (params.get("trend") === "split") trendsState.mode = "split";
   const view = params.get("view") || "global";
   const other = view.match(/^(\d+):([\w-]{1,24})$/);
   if (other) {
@@ -602,7 +604,10 @@ async function renderView(loadId) {
   try {
     const rows = await api(`/api/stats/${state.tab}?${statsQuery()}`);
     if (loadId !== state.loadId) return;
-    renderTable(rows, host);
+    const tab = state.tabs.find((t) => t.id === state.tab);
+    if (tab?.kind === "trends")
+      renderTrends(rows, host, { character: $("fChar").value });
+    else renderTable(rows, host);
   } catch (error) {
     if (loadId !== state.loadId) return;
     host.replaceChildren(el("div", { class: "err", text: error.message }));

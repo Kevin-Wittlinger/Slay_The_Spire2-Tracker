@@ -83,6 +83,13 @@ the first `x-forwarded-for` entry.
 
 Locally, the database lives at `data/spire-ledger.db`. Production data is stored in Turso.
 
+## Trends
+
+The **Trends** tab has two charts. The top one is your win rate over every run, after each run. The bottom one zooms in
+on your latest 50 runs, where each point is the win rate of the 10 runs up to it. **By character** draws one line per
+character in both charts, and clicking a character in the legend hides or shows it. The character, ascension and patch
+filters apply, and hovering a chart shows the win rate at any run.
+
 ## Filters
 
 Character, ascension, **patch** (the game build a run was played on) and minimum sample filter every tab. They are

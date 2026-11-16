@@ -6,6 +6,7 @@ const { openDb } = require("../lib/db");
 const { createImporter } = require("../lib/importer");
 const { createHandler } = require("../lib/handler");
 const { createRateLimiter } = require("../lib/ratelimit");
+const { buildTrends } = require("../public/trends");
 const { TABS, runQuery } = require("../db/queries");
 
 function makeRun({
@@ -243,6 +244,31 @@ async function main() {
     "v0.99.0",
   ]);
   await patchDb.close();
+
+  // Trends: one row per run, oldest first, and the page-side math for win rate over time.
+  const trendRows = await runQuery(db, "trends", {});
+  assert.strictEqual(trendRows.length, 2);
+  assert(trendRows.every((row, i) => i === 0 || row.start_time >= trendRows[i - 1].start_time));
+  const series = buildTrends(
+    [1, 0, 1, 1].map((win, i) => ({ start_time: 1000 + i, character: i % 2 ? "B" : "A", win })),
+    2, // "form" window: win rate of the last 2 runs
+  );
+  assert.deepStrictEqual(
+    series.overall.map((p) => p.rate),
+    [100, 50, (100 * 2) / 3, 75],
+  );
+  assert.deepStrictEqual(
+    series.overall.map((p) => p.form),
+    [100, 50, 50, 100],
+  );
+  assert.deepStrictEqual(
+    series.characters.map((c) => [c.character, c.n, c.wins, c.points.at(-1).rate, c.points.at(-1).form]),
+    [["A", 2, 2, 100, 100], ["B", 2, 1, 50, 50]],
+  );
+  assert.strictEqual(buildTrends([]).total, 0);
+  const tabList = JSON.parse((await dispatch(createHandler(db), "/api/tabs")).body);
+  assert.strictEqual(tabList.find((tab) => tab.id === "trends").kind, "trends");
+  assert.strictEqual(tabList.find((tab) => tab.id === "characters").kind, "table");
 
   // The Characters tab always lists characters in the fixed display order.
   const orderDb = await openDb(":memory:");
