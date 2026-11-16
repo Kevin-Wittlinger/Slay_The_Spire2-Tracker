@@ -228,6 +228,10 @@ const TABS = {
     title: "Recent runs",
     sql: `
       SELECT datetime(r.start_time, 'unixepoch', 'localtime') AS started,
+             -- "id:name,id:name" for every profile that imported this run
+             (SELECT group_concat(p.profile_id || ':' || p.username, ',')
+              FROM profile_runs pr JOIN profiles p ON p.profile_id = pr.profile_id
+              WHERE pr.run_id = r.run_id) AS player,
              r.character,
              r.ascension,
              CASE r.win WHEN 1 THEN 'WIN' ELSE 'LOSS' END AS result,

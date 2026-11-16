@@ -351,6 +351,16 @@ async function main() {
   const top = JSON.parse((await dispatch(handler, "/api/profiles")).body);
   assert(top.length >= 2 && top[0].runs >= top[top.length - 1].runs);
   const aliceId = found[0].id;
+  // Recent runs say who played each run, as "id:name" pairs the page turns into links.
+  const recent = await runQuery(db, "recent_runs", {});
+  const withAlice = recent.find((row) => String(row.player).includes(":alice"));
+  assert(withAlice, "a recent run lists alice as a player");
+  assert(
+    (await runQuery(db, "recent_runs", { profileId: aliceId })).every((row) =>
+      String(row.player).includes(":alice"),
+    ),
+  );
+
   // Abandoned runs are stored but never counted, so every count agrees.
   const abandoned = { ...makeRun({ seed: "ABANDONED", start: 1794700000 }), was_abandoned: true };
   const abandonedImport = await dispatch(

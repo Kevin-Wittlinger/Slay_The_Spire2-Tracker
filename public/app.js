@@ -346,6 +346,41 @@ function compareValues(a, b) {
   return collator.compare(String(pretty(a)), String(pretty(b)));
 }
 
+// "3:alice,7:bob" -> [{id: 3, username: "alice"}, ...], sorted by name.
+function parsePlayers(raw) {
+  return String(raw || "")
+    .split(",")
+    .map((part) => {
+      const [id, ...name] = part.split(":");
+      return { id: Number(id), username: name.join(":") };
+    })
+    .filter((player) => Number.isSafeInteger(player.id) && player.id > 0 && player.username)
+    .sort((a, b) => collator.compare(a.username, b.username));
+}
+
+// Jump to a player's stats, keeping the current tab and filters.
+function viewPlayer(player) {
+  window.scrollTo({ top: 0 });
+  if (state.me && player.id === state.me.id) return setView("me");
+  return setView("other", { id: player.id, username: player.username });
+}
+
+// Fills a table cell with one clickable username per player.
+function appendPlayers(row, td) {
+  (row.players || []).forEach((player, index) => {
+    if (index) td.append(", ");
+    td.append(
+      el("button", {
+        type: "button",
+        class: "user-link",
+        title: `View ${player.username}'s stats`,
+        text: player.username,
+        onclick: () => viewPlayer(player),
+      }),
+    );
+  });
+}
+
 function emptyMessage() {
   const filtered =
     $("fChar").value || $("fAsc").value || Number($("fMin").value) > 1;
@@ -366,7 +401,17 @@ function renderTable(rows, host) {
   }
 
   const cols = Object.keys(rows[0]);
-  const data = rows.map((row) => cols.map((col) => row[col]));
+  const playerCol = cols.indexOf("player");
+  const data = rows.map((row) => {
+    const cells = cols.map((col) => row[col]);
+    if (playerCol >= 0) {
+      // Keep the clickable list on the row; the cell value becomes plain names
+      // so sorting and searching work on what people see.
+      cells.players = parsePlayers(cells[playerCol]);
+      cells[playerCol] = cells.players.map((p) => p.username).join(", ");
+    }
+    return cells;
+  });
   const selected = new Map(); // column index -> chosen value
   let sortCol = -1;
   let ascending = false;
@@ -409,6 +454,10 @@ function renderTable(rows, host) {
             const td = el("td");
             const isPct = /pct$/.test(col) && typeof value === "number";
             if (typeof value === "number") td.className = "num";
+            if (col === "player") {
+              appendPlayers(row, td);
+              return td;
+            }
             if (col === "character") td.className = "char-cell";
             if (col === "result" && (value === "WIN" || value === "LOSS"))
               td.className = value === "WIN" ? "result-win" : "result-loss";
