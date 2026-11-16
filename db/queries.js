@@ -37,7 +37,15 @@ const TABS = {
       WHERE ${BASE}
       GROUP BY r.character
       HAVING runs >= @min
-      ORDER BY runs DESC`,
+      ORDER BY CASE
+                 WHEN r.character LIKE '%IRONCLAD' THEN 1
+                 WHEN r.character LIKE '%SILENT' THEN 2
+                 WHEN r.character LIKE '%REGENT' THEN 3
+                 WHEN r.character LIKE '%NECROBINDER' THEN 4
+                 WHEN r.character LIKE '%DEFECT' THEN 5
+                 WHEN r.character LIKE '%FOOL' THEN 6
+                 ELSE 7
+               END, runs DESC`,
   },
 
   ascensions: {

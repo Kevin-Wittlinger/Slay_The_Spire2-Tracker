@@ -204,6 +204,25 @@ async function main() {
   assert.deepStrictEqual(killerTypes, ["Boss", "Elite", "Regular combat"]);
   await killedByDb.close();
 
+  // The Characters tab always lists characters in the fixed display order.
+  const orderDb = await openDb(":memory:");
+  await orderDb.batch(
+    ["DEFECT", "FOOL", "NECROBINDER", "REGENT", "SILENT", "IRONCLAD", "NEWGUY"].map(
+      (name, i) => ({
+        sql: "INSERT INTO runs (run_id, character, win) VALUES (?,?,?)",
+        args: [`o${i}`, `CHARACTER.${name}`, 0],
+      }),
+    ),
+    "write",
+  );
+  assert.deepStrictEqual(
+    (await runQuery(orderDb, "characters", {})).map((row) =>
+      row.character.replace("CHARACTER.", ""),
+    ),
+    ["IRONCLAD", "SILENT", "REGENT", "NECROBINDER", "DEFECT", "FOOL", "NEWGUY"],
+  );
+  await orderDb.close();
+
   const tabs = await dispatch(handler, "/api/tabs");
   const visibleTabs = JSON.parse(tabs.body).map((tab) => tab.id);
   assert(!visibleTabs.includes("events"));

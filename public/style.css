@@ -350,6 +350,10 @@ th[aria-sort="descending"]::after {
 td.num {
   font-variant-numeric: tabular-nums;
 }
+/* Let the character column hug its logo instead of stretching across the table. */
+td.char-cell {
+  width: 1%;
+}
 .char-logo {
   display: block;
   max-width: none;

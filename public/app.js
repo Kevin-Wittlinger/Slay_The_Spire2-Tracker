@@ -46,13 +46,43 @@ const FILTERABLE = new Set([
 // The images are trimmed and scaled so the lettering is the same size in every logo;
 // to add a character, drop in a PNG prepared the same way and add its size here.
 const CHARACTER_LOGOS = {
-  defect: [143, 30],
-  fool: [110, 23],
-  ironclad: [148, 23],
-  necrobinder: [201, 31],
-  regent: [141, 34],
-  silent: [138, 26],
+  defect: [126, 26],
+  fool: [97, 20],
+  ironclad: [130, 20],
+  necrobinder: [177, 27],
+  regent: [124, 30],
+  silent: [121, 23],
 };
+
+// Characters always appear in this order wherever they are listed.
+const CHARACTER_ORDER = [
+  "ironclad",
+  "silent",
+  "regent",
+  "necrobinder",
+  "defect",
+  "fool",
+];
+
+function characterSlug(value) {
+  return String(value)
+    .replace(/^CHARACTER./, "")
+    .replace(/^THE_/, "")
+    .toLowerCase();
+}
+
+function characterRank(value) {
+  const rank = CHARACTER_ORDER.indexOf(characterSlug(value));
+  return rank === -1 ? CHARACTER_ORDER.length : rank;
+}
+
+// Fixed order first; characters we don't know about follow alphabetically.
+function sortCharacters(values) {
+  return [...values].sort(
+    (a, b) =>
+      characterRank(a) - characterRank(b) || String(a).localeCompare(String(b)),
+  );
+}
 
 // ---------- helpers ----------
 async function api(path, opts = {}) {
@@ -116,10 +146,7 @@ function pretty(value) {
 // An <img> for a known character id (e.g. "CHARACTER.THE_SILENT"), else null.
 function characterLogo(value) {
   if (typeof value !== "string") return null;
-  const slug = value
-    .replace(/^CHARACTER./, "")
-    .replace(/^THE_/, "")
-    .toLowerCase();
+  const slug = characterSlug(value);
   const size = Object.hasOwn(CHARACTER_LOGOS, slug) ? CHARACTER_LOGOS[slug] : null;
   if (!size) return null;
   return el("img", {
@@ -165,7 +192,8 @@ function createCharacterPicker(values, current, onChange) {
     group.append(button);
   };
   add("", "All");
-  for (const value of values) add(value, characterLogo(value) || pretty(value));
+  for (const value of sortCharacters(values))
+    add(value, characterLogo(value) || pretty(value));
   select(current);
   return group;
 }
@@ -339,6 +367,7 @@ function renderTable(rows, host) {
             const td = el("td");
             const isPct = /pct$/.test(col) && typeof value === "number";
             if (typeof value === "number") td.className = "num";
+            if (col === "character") td.className = "char-cell";
             if (isPct) {
               const good = value >= 50;
               const bar = el("span", { class: `bar ${good ? "good" : "bad"}` });
