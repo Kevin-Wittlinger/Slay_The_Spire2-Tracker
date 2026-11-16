@@ -11,7 +11,7 @@ Solo run statistics for Slay the Spire 2, stored in SQLite and shown on a local 
    npm start
 
 3. Open http://localhost:3000
-4. Create a profile or sign in, then choose **Import run folder** and select the folder that contains your `.run` files.
+4. Create a profile or sign in, then choose **Import Run Folder** and select the folder that contains your `.run` files.
    The browser uploads the selected files to the server.
 
 ## Vercel

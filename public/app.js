@@ -396,7 +396,7 @@ function emptyMessage() {
   if (state.view.scope === "global")
     return "No runs have been imported yet. Create a profile and import your .run folder to get started.";
   return state.me && state.view.profile.id === state.me.id
-    ? "You haven't imported any runs yet. Use Import run folder, or drop your .run files on this page."
+    ? "You haven't imported any runs yet. Use Import Run Folder, or drop your .run files on this page."
     : `${state.view.profile.username} hasn't imported any runs yet.`;
 }
 
