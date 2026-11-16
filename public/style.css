@@ -615,24 +615,7 @@ td.result-loss {
   white-space: pre-wrap;
 }
 
-/* ---------- admin + drop overlay ---------- */
-.admin {
-  margin-top: 36px;
-  color: var(--dim);
-  font-size: 13px;
-}
-.admin summary {
-  width: fit-content;
-}
-.admin-body {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-  margin-top: 10px;
-}
-.admin-body input {
-  width: 180px;
-}
+/* ---------- drop overlay ---------- */
 .drop-overlay {
   position: fixed;
   inset: 0;

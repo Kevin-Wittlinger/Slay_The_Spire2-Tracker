@@ -951,31 +951,6 @@ async function importFiles(files) {
   }
 }
 
-// ---------- admin ----------
-async function downloadBackup() {
-  const token = $("importToken").value.trim();
-  try {
-    const response = await fetch("/api/export", {
-      headers: token ? { Authorization: `Bearer ${token}` } : {},
-    });
-    if (!response.ok) {
-      let message = response.statusText;
-      try {
-        message = (await response.json()).error || message;
-      } catch {
-        /* keep status text */
-      }
-      throw new Error(message);
-    }
-    const url = URL.createObjectURL(await response.blob());
-    const link = el("a", { href: url, download: "sts2-tracker-export.json" });
-    link.click();
-    setTimeout(() => URL.revokeObjectURL(url), 1000);
-  } catch (error) {
-    setStatus(error.message, "warn");
-  }
-}
-
 // ---------- startup ----------
 function resetFilters() {
   $("fChar").value = "";
@@ -1034,17 +1009,6 @@ function wireEvents() {
     importFiles([...runFiles.files]);
     runFiles.value = "";
   });
-
-  try {
-    const importToken = $("importToken");
-    importToken.value = sessionStorage.getItem("spireImportToken") || "";
-    importToken.addEventListener("input", () =>
-      sessionStorage.setItem("spireImportToken", importToken.value),
-    );
-  } catch {
-    /* storage can be blocked; the key just won't be remembered */
-  }
-  $("dbDownload").addEventListener("click", downloadBackup);
 
   // Drag-and-drop import with a visible drop target.
   let dragDepth = 0;

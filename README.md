@@ -24,8 +24,13 @@ Set these project environment variables in Vercel:
 - `IMPORT_TOKEN`: a separate long random admin key for backups and the admin SQL endpoint.
 
 Deploy after saving the variables. The database schema is created automatically. Everyone can view combined stats;
-users create or sign in to a profile to import and view their own runs. Enter the `IMPORT_TOKEN` (under **Admin tools**)
-only to download backups.
+users create or sign in to a profile to import and view their own runs.
+
+The website has no admin screen. `IMPORT_TOKEN` only protects two API endpoints, so a backup is one request:
+
+    curl -H "Authorization: Bearer <IMPORT_TOKEN>" https://<your-site>/api/export -o backup.json
+
+`POST /api/sql` (one `SELECT` per request, same header) is available for ad-hoc queries.
 
 ## Profiles
 
