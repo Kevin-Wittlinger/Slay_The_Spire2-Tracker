@@ -363,6 +363,7 @@ async function renderOverview(loadId) {
     ["Wins", nf.format(o.wins)],
     ["Win rate", `${o.win_pct}%`],
     ["Avg run length", `${o.avg_minutes} min`],
+    ["Abandoned (not counted)", nf.format(o.abandoned)],
   ];
   $("overview").replaceChildren(
     ...items.map(([label, value]) =>
@@ -639,7 +640,13 @@ async function importFiles(files) {
 
   state.importing = true;
   renderScope();
-  const totals = { imported: 0, duplicate: 0, multiplayer: 0, invalid: 0 };
+  const totals = {
+    imported: 0,
+    duplicate: 0,
+    multiplayer: 0,
+    invalid: 0,
+    abandoned: 0,
+  };
   const maxBatchBytes = 3 * 1024 * 1024;
   let batch = [];
   let batchBytes = 2;
@@ -678,7 +685,11 @@ async function importFiles(files) {
       batchBytes += file.size + 1;
     }
     await sendBatch();
-    const parts = [`${totals.imported} imported`];
+    const parts = [
+      totals.abandoned
+        ? `${totals.imported} imported (${totals.abandoned} abandoned, not counted in stats)`
+        : `${totals.imported} imported`,
+    ];
     if (totals.duplicate) parts.push(`${totals.duplicate} already added`);
     if (totals.multiplayer) parts.push(`${totals.multiplayer} multiplayer skipped`);
     if (totals.invalid) parts.push(`${totals.invalid} invalid`);

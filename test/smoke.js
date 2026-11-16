@@ -327,6 +327,39 @@ async function main() {
   const top = JSON.parse((await dispatch(handler, "/api/profiles")).body);
   assert(top.length >= 2 && top[0].runs >= top[top.length - 1].runs);
   const aliceId = found[0].id;
+  // Abandoned runs are stored but never counted, so every count agrees.
+  const abandoned = { ...makeRun({ seed: "ABANDONED", start: 1794700000 }), was_abandoned: true };
+  const abandonedImport = await dispatch(
+    handler,
+    "/api/import",
+    "POST",
+    [abandoned],
+    undefined,
+    aliceCookie,
+  );
+  assert.strictEqual(JSON.parse(abandonedImport.body).abandoned, 1);
+  assert.strictEqual(
+    JSON.parse(
+      (await dispatch(handler, `/api/stats/overview?scope=profile&profileId=${aliceId}`)).body,
+    )[0].abandoned,
+    1,
+  );
+  assert.strictEqual(
+    JSON.parse((await dispatch(handler, "/api/profiles?q=alice")).body)[0].runs,
+    1,
+  );
+  assert.strictEqual(
+    JSON.parse(
+      (await dispatch(handler, `/api/status?scope=profile&profileId=${aliceId}`)).body,
+    ).runs,
+    1,
+  );
+  assert.strictEqual(
+    JSON.parse(
+      (await dispatch(handler, `/api/stats/overview?scope=profile&profileId=${aliceId}`)).body,
+    )[0].runs,
+    1,
+  );
   assert.strictEqual(
     JSON.parse(
       (

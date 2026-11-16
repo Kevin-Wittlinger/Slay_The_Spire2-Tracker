@@ -63,7 +63,8 @@ the first `x-forwarded-for` entry.
 - **Stores cloud data in Turso** so imported runs remain available between Vercel function calls.
 - **Solo only.** Any file with more than one player is skipped and counted as "multiplayer skipped" in the status line.
 - **No double counting.** A run is identified by seed plus start time, so repeated uploads are safe.
-- Abandoned runs are excluded from all stats.
+- Abandoned runs are excluded from all stats and counts. They are stored, and the **Abandoned** card on the overview
+  shows how many there are, so a player's imported total can be larger than the runs shown.
 
 ## Files
 

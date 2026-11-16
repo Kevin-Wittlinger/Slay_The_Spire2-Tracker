@@ -18,7 +18,9 @@ const TABS = {
       SELECT COUNT(*) AS runs,
              COALESCE(SUM(r.win), 0) AS wins,
              COALESCE(ROUND(100.0 * SUM(r.win) / NULLIF(COUNT(*), 0), 1), 0) AS win_pct,
-             COALESCE(ROUND(AVG(r.run_time) / 60.0, 1), 0) AS avg_minutes
+             COALESCE(ROUND(AVG(r.run_time) / 60.0, 1), 0) AS avg_minutes,
+             (SELECT COUNT(*) FROM runs r
+              WHERE r.abandoned = 1 AND ${FILTER} AND ${PROFILE_FILTER}) AS abandoned
       FROM runs r
       WHERE ${BASE}`,
   },

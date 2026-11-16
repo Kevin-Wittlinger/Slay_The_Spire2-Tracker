@@ -245,6 +245,9 @@ main {
   gap: 12px;
   margin-bottom: 20px;
 }
+.note {
+  margin: -8px 0 18px;
+}
 .stat {
   background: var(--panel);
   border: 1px solid var(--line);
