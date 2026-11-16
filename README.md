@@ -106,6 +106,15 @@ Character logos live in `public/img/characters/` and ascension flames (levels 0-
 They replace the plain text in tables. Anything without an icon, such as a new character or an ascension above 10,
 falls back to text.
 
+## Analytics
+
+The site loads one Google tag, the container `GTM-PTM5ZFBX` (set in `public/analytics.js`), which reports to Google
+Analytics 4. What it measures is configured in that container on Google's side, and Google asks for only one Google tag
+per page, so don't add a second one. It does nothing on `localhost`, so local testing never reaches your reports. The tag is a separate file, not an inline snippet, and the
+Content-Security-Policy in `vercel.json` and `server.js` lists the Google domains it needs. If you change the policy
+or add another outside service, update both places or the browser will silently block it. Analytics sets cookies, so
+visitors in some regions (for example the EU) may need a notice or a consent banner.
+
 ## Notes
 
 - The local development server listens only on your own machine (127.0.0.1). Vercel uses a serverless function.

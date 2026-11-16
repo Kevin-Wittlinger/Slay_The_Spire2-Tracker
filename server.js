@@ -21,7 +21,7 @@ const SECURITY_HEADERS = {
   "X-Frame-Options": "DENY",
   "Referrer-Policy": "same-origin",
   "Content-Security-Policy":
-    "default-src 'self'; img-src 'self' data:; frame-ancestors 'none'",
+    "default-src 'self'; script-src 'self' https://*.googletagmanager.com; img-src 'self' data: https://*.google-analytics.com https://*.googletagmanager.com https://*.g.doubleclick.net https://*.google.com; connect-src 'self' https://*.google-analytics.com https://*.analytics.google.com https://*.googletagmanager.com https://*.g.doubleclick.net https://*.google.com; frame-ancestors 'none'",
 };
 
 async function start() {

@@ -245,6 +245,21 @@ async function main() {
   ]);
   await patchDb.close();
 
+  // Google Analytics: the tag is loaded from a file (inline scripts are blocked by the
+  // Content-Security-Policy) and both CSPs must allow Google's domains, or it fails silently.
+  const publicFile = (name) => require("fs").readFileSync(require("path").join(__dirname, "..", name), "utf8");
+  assert(publicFile("public/index.html").includes('<script src="analytics.js"></script>'));
+  const analyticsSource = publicFile("public/analytics.js");
+  assert(analyticsSource.includes('"GTM-PTM5ZFBX"'));
+  // Google: only one Google tag per page. A direct gtag.js tag next to the container would double count.
+  assert(!analyticsSource.includes("gtag/js"), "only the container tag is loaded");
+  assert(!publicFile("public/index.html").includes("googletagmanager"), "tag is loaded from analytics.js only");
+  const cspOf = (text) => text.match(/default-src 'self'[^"]*/)[0];
+  assert.strictEqual(cspOf(publicFile("vercel.json")), cspOf(publicFile("server.js")));
+  for (const need of ["script-src 'self' https://*.googletagmanager.com", "https://*.google-analytics.com", "https://*.analytics.google.com", "https://*.g.doubleclick.net"])
+    assert(cspOf(publicFile("vercel.json")).includes(need), need);
+  assert(!publicFile("public/index.html").match(/<script(?![^>]*src=)[^>]*>/), "no inline scripts");
+
   // Guard against scroll-jump bugs: views must be replaced through swapView() in app.js,
   // never by emptying the container first (see the comment on swapView).
   const fs = require("fs");
