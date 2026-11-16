@@ -1,4 +1,4 @@
-# Spire Ledger
+# STS2 TRACKER
 
 Solo run statistics for Slay the Spire 2, stored in SQLite and shown on a local website.
 

@@ -39,7 +39,7 @@ async function start() {
     fs.createReadStream(file).pipe(res);
   });
   server.listen(PORT, HOST, () =>
-    console.log(`Spire Ledger running at http://localhost:${PORT}`),
+    console.log(`STS2 TRACKER running at http://localhost:${PORT}`),
   );
 }
 

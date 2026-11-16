@@ -259,7 +259,7 @@ async function main() {
       const url = URL.createObjectURL(await response.blob());
       const link = document.createElement("a");
       link.href = url;
-      link.download = "spire-ledger-export.json";
+      link.download = "sts2-tracker-export.json";
       link.click();
       setTimeout(() => URL.revokeObjectURL(url), 0);
     } catch (error) {
