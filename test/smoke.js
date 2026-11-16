@@ -177,6 +177,10 @@ async function main() {
   );
 
   const handler = createHandler(db);
+  const tabs = await dispatch(handler, "/api/tabs");
+  const visibleTabs = JSON.parse(tabs.body).map((tab) => tab.id);
+  assert(!visibleTabs.includes("events"));
+  assert(!visibleTabs.includes("event_choices"));
   assert.strictEqual(
     (await dispatch(handler, "/api/import", "POST", [makeRun({ seed: "D" })]))
       .status,

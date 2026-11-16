@@ -143,6 +143,7 @@ const TABS = {
 
   events: {
     title: "Events",
+    hidden: true,
     // Run win rate for runs that hit the event at least once.
     sql: `
       SELECT event,
@@ -162,6 +163,7 @@ const TABS = {
 
   event_choices: {
     title: "Event choices",
+    hidden: true,
     sql: `
       SELECT e.event_id AS event,
              e.choice,

@@ -104,7 +104,7 @@ async function renderOverview() {
 
 function renderTabs() {
   $("tabs").innerHTML = "";
-  for (const t of [...tabs, { id: "sql", title: "Custom SQL" }]) {
+  for (const t of tabs) {
     const b = document.createElement("button");
     b.textContent = t.title;
     if (t.id === curTab) b.className = "on";
@@ -119,28 +119,6 @@ function renderTabs() {
 
 async function renderView() {
   const host = $("view");
-  if (curTab === "sql") {
-    if (!$("sqlBox")) {
-      host.innerHTML = `<p class="hint">Read-only. Tables: <code>runs</code> <code>run_cards</code> <code>run_relics</code> <code>card_choices</code> <code>fights</code> <code>events</code>. Join on <code>run_id</code>.</p>
-        <textarea id="sqlBox">SELECT character, COUNT(*) AS runs, SUM(win) AS wins FROM runs GROUP BY character</textarea>
-        <p><button id="runSql">Run</button></p><div id="sqlOut"></div>`;
-      $("runSql").onclick = async () => {
-        try {
-          renderTable(
-            await api("/api/sql", {
-              method: "POST",
-              headers: authHeaders(),
-              body: JSON.stringify({ sql: $("sqlBox").value }),
-            }),
-            $("sqlOut"),
-          );
-        } catch (e) {
-          $("sqlOut").innerHTML = `<div class="err">${e.message}</div>`;
-        }
-      };
-    }
-    return;
-  }
   try {
     renderTable(await api(`/api/stats/${curTab}?` + qs()), host);
   } catch (e) {
@@ -295,7 +273,9 @@ async function main() {
     $("accountMessage").textContent = "";
   };
   $("signInButton").addEventListener("click", () => openAccountPanel("login"));
-  $("createProfileButton").addEventListener("click", () => openAccountPanel("register"));
+  $("createProfileButton").addEventListener("click", () =>
+    openAccountPanel("register"),
+  );
   $("accountForm").addEventListener("submit", async (event) => {
     event.preventDefault();
     $("accountMessage").textContent = "Working...";
