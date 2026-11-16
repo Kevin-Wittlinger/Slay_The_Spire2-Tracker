@@ -282,6 +282,7 @@ function writeHash() {
   params.set("view", viewToken());
   if ($("fChar").value) params.set("character", $("fChar").value);
   if ($("fAsc").value) params.set("ascension", $("fAsc").value);
+  if ($("fPatch").value) params.set("patch", $("fPatch").value);
   if (Number($("fMin").value) > 1) params.set("min", $("fMin").value);
   history.replaceState(null, "", `#${params}`);
 }
@@ -300,7 +301,7 @@ function readHash() {
   } else if (view === "me") {
     initial.view = { scope: "me" };
   }
-  for (const key of ["character", "ascension", "min"]) {
+  for (const key of ["character", "ascension", "patch", "min"]) {
     if (params.get(key)) initial.filters[key] = params.get(key);
   }
   return initial;
@@ -319,6 +320,7 @@ function statsQuery() {
   const params = new URLSearchParams();
   if ($("fChar").value) params.set("character", $("fChar").value);
   if ($("fAsc").value) params.set("ascension", $("fAsc").value);
+  if ($("fPatch").value) params.set("patch", $("fPatch").value);
   params.set("min", Math.max(1, Number($("fMin").value) || 1));
   return scopeParams(params).toString();
 }
@@ -383,7 +385,10 @@ function appendPlayers(row, td) {
 
 function emptyMessage() {
   const filtered =
-    $("fChar").value || $("fAsc").value || Number($("fMin").value) > 1;
+    $("fChar").value ||
+    $("fAsc").value ||
+    $("fPatch").value ||
+    Number($("fMin").value) > 1;
   if (filtered)
     return "Nothing matches these filters. Try lowering the minimum sample or resetting the filters.";
   if (state.view.scope === "global")
@@ -629,6 +634,13 @@ async function fillFilters() {
     filters.ascensions,
     (a) => `Ascension ${a}`,
     "All ascensions",
+  );
+  // Newest patch first; version numbers compare numerically (0.100 after 0.99).
+  fillSelect(
+    $("fPatch"),
+    [...filters.patches].sort((a, b) => collator.compare(b, a)),
+    (patch) => patch,
+    "All patches",
   );
 }
 
@@ -950,6 +962,7 @@ function resetFilters() {
   $("fChar").value = "";
   renderCharacterPicker();
   $("fAsc").value = "";
+  $("fPatch").value = "";
   $("fMin").value = 1;
   refreshStats();
 }
@@ -971,6 +984,7 @@ function wireEvents() {
 
   const onFilter = () => refreshStats();
   $("fAsc").addEventListener("change", onFilter);
+  $("fPatch").addEventListener("change", onFilter);
   $("fMin").addEventListener("input", debounce(onFilter, 300));
   $("resetFilters").addEventListener("click", resetFilters);
 
@@ -1075,7 +1089,7 @@ async function main() {
     state.view = { scope: "profile", profile: state.me };
 
   // Filter dropdowns are filled from the server; seed values from the URL first.
-  const { character, ascension, min } = initial.filters;
+  const { character, ascension, patch, min } = initial.filters;
   $("fMin").value = min || 1;
   renderScope();
   renderTabs();
@@ -1085,6 +1099,7 @@ async function main() {
     renderCharacterPicker();
   }
   if (ascension) $("fAsc").value = ascension;
+  if (patch) $("fPatch").value = patch;
   await refresh();
 }
 

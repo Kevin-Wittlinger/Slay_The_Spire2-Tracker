@@ -1,10 +1,11 @@
 // Every statistic on the site is one SQL query in this file.
-// Named parameters: @character and @ascension (NULL = no filter), @min (minimum sample size).
+// Named parameters: @character, @ascension and @patch (NULL = no filter), @min (minimum sample size).
 // Abandoned runs are excluded everywhere. Multiplayer runs never reach the database.
 const { rowsToObjects } = require("../lib/db");
 
 const FILTER = `(@character IS NULL OR r.character = @character)
-  AND (@ascension IS NULL OR r.ascension = @ascension)`;
+  AND (@ascension IS NULL OR r.ascension = @ascension)
+  AND (@patch IS NULL OR r.build_id = @patch)`;
 const PROFILE_FILTER = `(@profileId IS NULL OR EXISTS (
   SELECT 1 FROM profile_runs pr WHERE pr.run_id = r.run_id AND pr.profile_id = @profileId
 ))`;

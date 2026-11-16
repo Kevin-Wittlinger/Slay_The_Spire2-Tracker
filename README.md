@@ -83,6 +83,11 @@ the first `x-forwarded-for` entry.
 
 Locally, the database lives at `data/spire-ledger.db`. Production data is stored in Turso.
 
+## Filters
+
+Character, ascension, **patch** (the game build a run was played on) and minimum sample filter every tab. They are
+kept in the page URL.
+
 ## Icons
 
 Character logos live in `public/img/characters/` and ascension flames (levels 0-10) in `public/img/ascension/`.

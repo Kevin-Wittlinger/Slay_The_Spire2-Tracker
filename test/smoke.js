@@ -209,6 +209,41 @@ async function main() {
   assert.deepStrictEqual(killerTypes, ["Boss", "Elite", "Regular combat"]);
   await killedByDb.close();
 
+  // Patch filter: every stat can be limited to one build, and the filter list offers each build.
+  const patchDb = await openDb(":memory:");
+  await patchDb.batch(
+    [
+      ["p1", "v0.98.2", 1],
+      ["p2", "v0.98.2", 0],
+      ["p3", "v0.99.0", 1],
+      ["p4", null, 1],
+    ].map(([id, build, win]) => ({
+      sql: "INSERT INTO runs (run_id, character, win, build_id) VALUES (?,?,?,?)",
+      args: [id, "CHARACTER.IRONCLAD", win, build],
+    })),
+    "write",
+  );
+  assert.strictEqual((await runQuery(patchDb, "overview", {}))[0].runs, 4);
+  assert.strictEqual(
+    (await runQuery(patchDb, "overview", { patch: "v0.98.2" }))[0].runs,
+    2,
+  );
+  assert.strictEqual(
+    (await runQuery(patchDb, "characters", { patch: "v0.99.0" }))[0].runs,
+    1,
+  );
+  assert.strictEqual(
+    (await runQuery(patchDb, "recent_runs", { patch: "v0.99.0" })).length,
+    1,
+  );
+  assert.strictEqual((await runQuery(patchDb, "recent_runs", {})).length, 4);
+  const patchApi = await dispatch(createHandler(patchDb), "/api/filters");
+  assert.deepStrictEqual(JSON.parse(patchApi.body).patches.sort(), [
+    "v0.98.2",
+    "v0.99.0",
+  ]);
+  await patchDb.close();
+
   // The Characters tab always lists characters in the fixed display order.
   const orderDb = await openDb(":memory:");
   await orderDb.batch(
