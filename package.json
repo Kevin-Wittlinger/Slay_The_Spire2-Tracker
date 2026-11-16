@@ -5,8 +5,7 @@
   "main": "server.js",
   "scripts": {
     "start": "node server.js",
-    "test": "node test/smoke.js",
-    "sync": "node tools/sync-runs.js"
+    "test": "node test/smoke.js"
   },
   "engines": {
     "node": "22.x"

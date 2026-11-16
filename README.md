@@ -88,28 +88,6 @@ the first `x-forwarded-for` entry.
 
 Locally, the database lives at `data/spire-ledger.db`. Production data is stored in Turso.
 
-## Sync runs from your computer (recommended)
-
-Slay the Spire 2 keeps its runs in `%APPDATA%SlayTheSpire2steam<id>profile1saveshistory`. Browsers refuse to
-let any website open a folder inside AppData ("can't open this folder because it contains system files"), so the
-website's own Sync button cannot read it. A small command-line tool has no such limit:
-
-    npm run sync
-
-(or double-click `sync-runs.bat`). The first run asks for your site address, username and password. It finds the game's
-history folder on its own, uploads the runs, and keeps a 30-day sign-in token (never your password) in
-`~/.sts2-tracker.json`, so later runs need no typing and only send new or changed files. Options: `--all` re-sends every
-file (the server skips duplicates), `--folder "<path>"` uses a different folder, `--logout` forgets the sign-in. For
-unattended use, set `STS2_URL`, `STS2_USER` and `STS2_PASS`. It needs Node 18 or newer.
-
-## Sync runs from the website
-
-This only works if your run files are somewhere the browser allows (not inside AppData). Signed-in users get a **Sync runs** button in the top right. The first click asks you to choose your run folder; the
-browser remembers it, and every later click re-scans that folder and uploads only the runs it hasn't sent before
-(**Change folder** picks a different one). This uses the File System Access API, so it works in Chrome and Edge. Brave
-has it turned off by default: open `brave://flags/#file-system-access-api`, set it to Enabled and restart. Firefox and
-Safari don't support it; **Import run folder** works everywhere.
-
 ## Trends
 
 The **Trends** tab has two charts. The top one is your win rate over every run, after each run. The bottom one zooms in
