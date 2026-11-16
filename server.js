@@ -14,6 +14,14 @@ const MIME = {
   ".svg": "image/svg+xml",
 };
 
+const SECURITY_HEADERS = {
+  "X-Content-Type-Options": "nosniff",
+  "X-Frame-Options": "DENY",
+  "Referrer-Policy": "same-origin",
+  "Content-Security-Policy":
+    "default-src 'self'; img-src 'self' data:; frame-ancestors 'none'",
+};
+
 async function start() {
   const db = await openDb();
   const handleApi = createHandler(db);
@@ -30,10 +38,12 @@ async function start() {
       !fs.existsSync(file) ||
       fs.statSync(file).isDirectory()
     ) {
-      res.writeHead(404, { "Content-Type": "text/plain" });
+      res.writeHead(404, { ...SECURITY_HEADERS, "Content-Type": "text/plain" });
       return res.end("Not found");
     }
     res.writeHead(200, {
+      ...SECURITY_HEADERS,
+      "Cache-Control": "no-cache",
       "Content-Type": MIME[path.extname(file)] || "application/octet-stream",
     });
     fs.createReadStream(file).pipe(res);

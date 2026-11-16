@@ -3,15 +3,18 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width,initial-scale=1" />
-    <title>STS2 TRACKER</title>
+    <meta
+      name="description"
+      content="Solo run statistics for Slay the Spire 2." />
+    <title>STS2 Tracker</title>
     <link rel="stylesheet" href="style.css" />
   </head>
   <body>
-    <header>
-      <h1>STS2 TRACKER</h1>
-      <span id="status">Connecting...</span>
+    <header class="topbar">
+      <h1>STS2 Tracker</h1>
+      <span id="status" role="status" aria-live="polite">Connecting...</span>
       <span class="spacer"></span>
-      <label id="importRunButton" class="btn" for="runFiles"
+      <label id="importRunButton" class="btn primary" for="runFiles" hidden
         >Import run folder</label
       >
       <input
@@ -22,29 +25,16 @@
         multiple
         accept=".run"
         hidden />
-      <input
-        id="importToken"
-        type="password"
-        placeholder="Admin key"
-        aria-label="Admin key"
-        autocomplete="off" />
-      <button id="dbDownload" type="button">Download backup</button>
-    </header>
-
-    <section class="profile-bar">
-      <div class="scope-switch" aria-label="Statistics scope">
-        <button id="globalScope" class="on" type="button">Everyone</button>
-        <button id="profileScope" type="button" disabled>My profile</button>
-      </div>
-      <span id="profileLabel">Combined public stats</span>
-      <span class="spacer"></span>
       <button id="signInButton" type="button">Sign in</button>
-      <button id="createProfileButton" type="button">Create profile</button>
+      <button id="createProfileButton" type="button" class="primary">
+        Create profile
+      </button>
       <button id="signOutButton" type="button" hidden>Sign out</button>
-    </section>
+    </header>
 
     <section id="accountPanel" class="account-panel" hidden>
       <form id="accountForm">
+        <strong id="accountTitle">Sign in</strong>
         <label
           >Username
           <input
@@ -64,27 +54,72 @@
             maxlength="128"
             required
         /></label>
-        <button id="accountSubmit" type="submit">Sign in</button>
-        <span id="accountMessage" class="hint" role="status"></span>
+        <button id="accountSubmit" type="submit" class="primary">Sign in</button>
+        <button id="accountSwitch" type="button" class="link"></button>
+        <button id="accountClose" type="button" class="link">Cancel</button>
+        <span id="accountMessage" class="hint" role="alert"></span>
       </form>
     </section>
 
     <main>
+      <section class="scope-bar" aria-label="Whose runs to show">
+        <div class="scope-switch" role="group">
+          <button id="globalScope" type="button" aria-pressed="true">
+            Everyone
+          </button>
+          <button id="profileScope" type="button" aria-pressed="false" hidden>
+            My profile
+          </button>
+          <button
+            id="otherScope"
+            type="button"
+            class="chip"
+            aria-pressed="true"
+            hidden></button>
+        </div>
+        <div class="profile-search">
+          <input
+            id="profileSearch"
+            type="search"
+            placeholder="Find a player..."
+            aria-label="Find a player's profile"
+            autocomplete="off"
+            maxlength="24" />
+          <ul id="profileResults" class="results" hidden></ul>
+        </div>
+      </section>
+
       <div class="controls">
-        Character
-        <select id="fChar">
-          <option value="">All</option>
-        </select>
-        Ascension
-        <select id="fAsc">
-          <option value="">All</option>
-        </select>
-        Min sample <input id="fMin" type="number" min="1" value="1" />
+        <label>Character <select id="fChar"></select></label>
+        <label>Ascension <select id="fAsc"></select></label>
+        <label
+          >Min sample
+          <input id="fMin" type="number" min="1" max="9999" value="1"
+        /></label>
+        <button id="resetFilters" type="button" class="link">Reset</button>
       </div>
+
       <div class="cards" id="overview"></div>
-      <nav id="tabs"></nav>
-      <div id="view"></div>
+      <nav id="tabs" aria-label="Statistics"></nav>
+      <div id="view" aria-live="polite"></div>
+
+      <details class="admin">
+        <summary>Admin tools</summary>
+        <div class="admin-body">
+          <input
+            id="importToken"
+            type="password"
+            placeholder="Admin key"
+            aria-label="Admin key"
+            autocomplete="off" />
+          <button id="dbDownload" type="button">Download backup</button>
+        </div>
+      </details>
     </main>
+
+    <div id="dropOverlay" class="drop-overlay" hidden>
+      Drop your .run files to import
+    </div>
     <script src="app.js"></script>
   </body>
 </html>

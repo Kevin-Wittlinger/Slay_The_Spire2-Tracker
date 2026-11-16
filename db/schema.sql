@@ -34,6 +34,13 @@ CREATE TABLE IF NOT EXISTS profile_runs (
   PRIMARY KEY (profile_id, run_id)
 );
 
+-- Fixed-window request counters used for rate limiting.
+CREATE TABLE IF NOT EXISTS rate_limits (
+  key          TEXT PRIMARY KEY,
+  window_start INTEGER NOT NULL,     -- ms since epoch
+  count        INTEGER NOT NULL
+);
+
 -- Final deck of each run (upgrade level, and the floor the card was added).
 CREATE TABLE IF NOT EXISTS run_cards (
   run_id      TEXT NOT NULL REFERENCES runs(run_id) ON DELETE CASCADE,

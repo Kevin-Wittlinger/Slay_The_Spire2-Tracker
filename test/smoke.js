@@ -5,6 +5,7 @@ process.env.IMPORT_TOKEN = "smoke-test-token";
 const { openDb } = require("../lib/db");
 const { createImporter } = require("../lib/importer");
 const { createHandler } = require("../lib/handler");
+const { createRateLimiter } = require("../lib/ratelimit");
 const { TABS, runQuery } = require("../db/queries");
 
 function makeRun({
@@ -303,6 +304,120 @@ async function main() {
     401,
   );
   assert.strictEqual((await dispatch(handler, "/api/export")).status, 401);
+
+  // Profile search and viewing another player's public stats.
+  const found = JSON.parse(
+    (await dispatch(handler, "/api/profiles?q=ali")).body,
+  );
+  assert.deepStrictEqual(
+    found.map((p) => p.username),
+    ["alice"],
+  );
+  assert.deepStrictEqual(
+    JSON.parse((await dispatch(handler, "/api/profiles?q=%25")).body),
+    [],
+  );
+  const aliceId = found[0].id;
+  assert.strictEqual(
+    JSON.parse(
+      (
+        await dispatch(
+          handler,
+          `/api/stats/overview?scope=profile&profileId=${aliceId}`,
+        )
+      ).body,
+    )[0].runs,
+    1,
+  );
+  assert.strictEqual(
+    (await dispatch(handler, "/api/stats/overview?scope=profile&profileId=9999"))
+      .status,
+    404,
+  );
+  assert.strictEqual(
+    (await dispatch(handler, "/api/stats/overview?ascension=abc")).status,
+    200,
+  );
+
+  // Bad input is a client error, never a crash.
+  assert.strictEqual(
+    (await dispatch(handler, "/api/import", "POST", [{ players: [{}] }], undefined, aliceCookie)).status,
+    200,
+  );
+
+  // Rate limiting: repeated failed sign-ins lock the username out.
+  for (let i = 1; i <= 8; i++) {
+    const attempt = await dispatch(handler, "/api/login", "POST", {
+      username: "alice",
+      password: "wrong-password",
+    });
+    assert.strictEqual(attempt.status, 401, `attempt ${i}`);
+  }
+  const locked = await dispatch(handler, "/api/login", "POST", {
+    username: "alice",
+    password: "abcde",
+  });
+  assert.strictEqual(locked.status, 429);
+  assert(Number(locked.headers["Retry-After"]) > 0);
+
+  // A successful sign-in clears the failure counter.
+  await dispatch(handler, "/api/register", "POST", {
+    username: "carol",
+    password: "abcde",
+  });
+  for (let i = 0; i < 5; i++) {
+    await dispatch(handler, "/api/login", "POST", {
+      username: "carol",
+      password: "nope-nope",
+    });
+  }
+  assert.strictEqual(
+    (
+      await dispatch(handler, "/api/login", "POST", {
+        username: "carol",
+        password: "abcde",
+      })
+    ).status,
+    200,
+  );
+  for (let i = 0; i < 5; i++) {
+    await dispatch(handler, "/api/login", "POST", {
+      username: "carol",
+      password: "nope-nope",
+    });
+  }
+  assert.strictEqual(
+    (
+      await dispatch(handler, "/api/login", "POST", {
+        username: "carol",
+        password: "abcde",
+      })
+    ).status,
+    200,
+  );
+
+  // Limiter unit behaviour: window counts, then rejects with Retry-After.
+  const limiter = createRateLimiter(db);
+  await limiter.hit("unit", 2, 60000);
+  await limiter.hit("unit", 2, 60000);
+  await assert.rejects(
+    () => limiter.hit("unit", 2, 60000),
+    (error) => error.status === 429 && Boolean(error.headers["Retry-After"]),
+  );
+  await limiter.reset("unit");
+  await limiter.hit("unit", 2, 60000);
+
+  // Account creation is limited per network address.
+  let lastStatus;
+  for (let i = 0; i < 12; i++) {
+    lastStatus = (
+      await dispatch(handler, "/api/register", "POST", {
+        username: `bulk${i}`,
+        password: "abcde",
+      })
+    ).status;
+  }
+  assert.strictEqual(lastStatus, 429);
 
   await db.close();
   console.log("All smoke tests passed.");
