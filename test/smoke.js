@@ -177,31 +177,31 @@ async function main() {
   );
 
   const handler = createHandler(db);
-    const killedByDb = await openDb(":memory:");
-    const killerSamples = [
-      ["normal", "ENCOUNTER.NORMAL", "monster"],
-      ["elite", "ENCOUNTER.ELITE", "elite"],
-      ["boss", "ENCOUNTER.BOSS", "boss"],
-    ];
-    const killerStatements = [];
-    for (const [runId, encounter, type] of killerSamples) {
-      killerStatements.push(
-        {
-          sql: "INSERT INTO runs (run_id, character, win, killed_by) VALUES (?,?,?,?)",
-          args: [runId, "CHARACTER.REGENT", 0, encounter],
-        },
-        {
-          sql: "INSERT INTO fights (run_id, floor, act, type, encounter_id, died) VALUES (?,?,?,?,?,?)",
-          args: [runId, 1, 1, type, encounter, 1],
-        },
-      );
-    }
-    await killedByDb.batch(killerStatements, "write");
-    const killerTypes = (await runQuery(killedByDb, "killed_by", {}))
-      .map((row) => row.type)
-      .sort();
-    assert.deepStrictEqual(killerTypes, ["Boss", "Elite", "Regular combat"]);
-    await killedByDb.close();
+  const killedByDb = await openDb(":memory:");
+  const killerSamples = [
+    ["normal", "ENCOUNTER.NORMAL", "monster"],
+    ["elite", "ENCOUNTER.ELITE", "elite"],
+    ["boss", "ENCOUNTER.BOSS", "boss"],
+  ];
+  const killerStatements = [];
+  for (const [runId, encounter, type] of killerSamples) {
+    killerStatements.push(
+      {
+        sql: "INSERT INTO runs (run_id, character, win, killed_by) VALUES (?,?,?,?)",
+        args: [runId, "CHARACTER.REGENT", 0, encounter],
+      },
+      {
+        sql: "INSERT INTO fights (run_id, floor, act, type, encounter_id, died) VALUES (?,?,?,?,?,?)",
+        args: [runId, 1, 1, type, encounter, 1],
+      },
+    );
+  }
+  await killedByDb.batch(killerStatements, "write");
+  const killerTypes = (await runQuery(killedByDb, "killed_by", {}))
+    .map((row) => row.type)
+    .sort();
+  assert.deepStrictEqual(killerTypes, ["Boss", "Elite", "Regular combat"]);
+  await killedByDb.close();
 
   const tabs = await dispatch(handler, "/api/tabs");
   const visibleTabs = JSON.parse(tabs.body).map((tab) => tab.id);

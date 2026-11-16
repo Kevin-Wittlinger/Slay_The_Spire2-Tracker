@@ -112,10 +112,9 @@ function renderTable(rows, host) {
       curTab === "killed_by" && c === "type"
         ? ["Regular combat", "Elite", "Boss", "Other"]
         : null;
-    const values =
-      fixedValues || [
-        ...new Set(data.map((row) => row[i]).filter((v) => v != null)),
-      ];
+    const values = fixedValues || [
+      ...new Set(data.map((row) => row[i]).filter((v) => v != null)),
+    ];
     if (!fixedValues && values.length < 2) return;
     values.sort((a, b) =>
       typeof a === "number" && typeof b === "number"
