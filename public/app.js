@@ -69,6 +69,15 @@ const ASCENSION_MAX = 10;
 const ASCENSION_SIZE = [23, 34];
 const ASCENSION_COLUMNS = new Set(["ascension", "max_ascension"]);
 
+// Fight-type icons (public/img/fights/<kind>.png) shown beside the text in "type" columns.
+// Fights are stored as monster / elite / boss; Killed by spells them "Regular combat" / "Elite" / "Boss".
+const FIGHT_ICONS = {
+  monster: ["normal", 28, 28],
+  "regular combat": ["normal", 28, 28],
+  elite: ["elite", 40, 34],
+  boss: ["boss", 38, 43],
+};
+
 // The filter-row logos are drawn smaller so all characters fit on one line.
 const PICKER_SCALE = 0.7;
 
@@ -178,6 +187,25 @@ function characterLogo(value, scale = 1) {
   });
 }
 
+// Icon plus the usual text, so the type is still readable and searchable. Null for other values.
+function fightTypeCell(value) {
+  const info = typeof value === "string" ? FIGHT_ICONS[value.toLowerCase()] : null;
+  if (!info) return null;
+  const wrap = el("span", { class: "fight-type" });
+  wrap.append(
+    el("img", {
+      class: "fight-icon",
+      src: `img/fights/${info[0]}.png`,
+      alt: "",
+      width: info[1],
+      height: info[2],
+      loading: "lazy",
+    }),
+    el("span", { text: formatCell(value, "type") }),
+  );
+  return wrap;
+}
+
 function ascensionIcon(value) {
   if (!Number.isInteger(value) || value < 0 || value > ASCENSION_MAX)
     return null;
@@ -283,6 +311,7 @@ function writeHash() {
   if ($("fChar").value) params.set("character", $("fChar").value);
   if ($("fAsc").value) params.set("ascension", $("fAsc").value);
   if ($("fPatch").value) params.set("patch", $("fPatch").value);
+  if ($("fArea").value) params.set("area", $("fArea").value);
   if (Number($("fMin").value) > 1) params.set("min", $("fMin").value);
   if (trendsState.mode === "split") params.set("trend", "split");
   history.replaceState(null, "", `#${params}`);
@@ -303,7 +332,7 @@ function readHash() {
   } else if (view === "me") {
     initial.view = { scope: "me" };
   }
-  for (const key of ["character", "ascension", "patch", "min"]) {
+  for (const key of ["character", "ascension", "patch", "area", "min"]) {
     if (params.get(key)) initial.filters[key] = params.get(key);
   }
   return initial;
@@ -323,6 +352,7 @@ function statsQuery() {
   if ($("fChar").value) params.set("character", $("fChar").value);
   if ($("fAsc").value) params.set("ascension", $("fAsc").value);
   if ($("fPatch").value) params.set("patch", $("fPatch").value);
+  if ($("fArea").value) params.set("area", $("fArea").value);
   params.set("min", Math.max(1, Number($("fMin").value) || 1));
   return scopeParams(params).toString();
 }
@@ -390,6 +420,7 @@ function emptyMessage() {
     $("fChar").value ||
     $("fAsc").value ||
     $("fPatch").value ||
+    $("fArea").value ||
     Number($("fMin").value) > 1;
   if (filtered)
     return "Nothing matches these filters. Try lowering the minimum sample or resetting the filters.";
@@ -499,7 +530,9 @@ function renderTable(rows, host) {
                   : ASCENSION_COLUMNS.has(col)
                     ? ascensionIcon(value)
                     : null;
+              const typeCell = col === "type" ? fightTypeCell(value) : null;
               if (logo) td.append(logo);
+              else if (typeCell) td.append(typeCell);
               else td.textContent = formatCell(value, col);
             }
             return td;
@@ -644,7 +677,22 @@ function fillSelect(select, values, labelFor, allLabel) {
   select.value = values.map(String).includes(previous) ? previous : "";
 }
 
+// The game's areas in the order they are played. Overgrowth and Underdocks are the two
+// alternatives for act 1. The value is what the server stores in run_acts.area.
+const AREA_NAMES = {
+  OVERGROWTH: "Overgrowth",
+  UNDERDOCKS: "Underdocks",
+  HIVE: "Hive",
+  GLORY: "Glory",
+};
+
 async function fillFilters() {
+  fillSelect(
+    $("fArea"),
+    Object.keys(AREA_NAMES),
+    (area) => AREA_NAMES[area],
+    "All areas",
+  );
   const filters = await api(`/api/filters?${scopeParams()}`);
   state.characters = filters.characters;
   renderCharacterPicker();
@@ -957,6 +1005,7 @@ function resetFilters() {
   renderCharacterPicker();
   $("fAsc").value = "";
   $("fPatch").value = "";
+  $("fArea").value = "";
   $("fMin").value = 1;
   refreshStats();
 }
@@ -979,6 +1028,7 @@ function wireEvents() {
   const onFilter = () => refreshStats();
   $("fAsc").addEventListener("change", onFilter);
   $("fPatch").addEventListener("change", onFilter);
+  $("fArea").addEventListener("change", onFilter);
   $("fMin").addEventListener("input", debounce(onFilter, 300));
   $("resetFilters").addEventListener("click", resetFilters);
 
@@ -1072,7 +1122,7 @@ async function main() {
     state.view = { scope: "profile", profile: state.me };
 
   // Filter dropdowns are filled from the server; seed values from the URL first.
-  const { character, ascension, patch, min } = initial.filters;
+  const { character, ascension, patch, area, min } = initial.filters;
   $("fMin").value = min || 1;
   renderScope();
   renderTabs();
@@ -1083,6 +1133,7 @@ async function main() {
   }
   if (ascension) $("fAsc").value = ascension;
   if (patch) $("fPatch").value = patch;
+  if (area) $("fArea").value = area;
   await refresh();
 }
 

@@ -1,11 +1,19 @@
 // Every statistic on the site is one SQL query in this file.
-// Named parameters: @character, @ascension and @patch (NULL = no filter), @min (minimum sample size).
+// Named parameters: @character, @ascension, @patch and @area (NULL = no filter), @min (minimum sample size).
 // Abandoned runs are excluded everywhere. Multiplayer runs never reach the database.
 const { rowsToObjects } = require("../lib/db");
 
 const FILTER = `(@character IS NULL OR r.character = @character)
   AND (@ascension IS NULL OR r.ascension = @ascension)
-  AND (@patch IS NULL OR r.build_id = @patch)`;
+  AND (@patch IS NULL OR r.build_id = @patch)
+  AND (@area IS NULL OR EXISTS (
+    SELECT 1 FROM run_acts ra WHERE ra.run_id = r.run_id AND ra.area = @area
+  ))`;
+// Fights and events are further limited to the rooms that happened inside the chosen area.
+const inArea = (alias) => `(@area IS NULL OR EXISTS (
+  SELECT 1 FROM run_acts ra
+  WHERE ra.run_id = ${alias}.run_id AND ra.act = ${alias}.act AND ra.area = @area
+))`;
 const PROFILE_FILTER = `(@profileId IS NULL OR EXISTS (
   SELECT 1 FROM profile_runs pr WHERE pr.run_id = r.run_id AND pr.profile_id = @profileId
 ))`;
@@ -151,7 +159,7 @@ const TABS = {
              ROUND(AVG(f.turns), 1) AS avg_turns
       FROM fights f
       JOIN runs r ON r.run_id = f.run_id
-      WHERE ${BASE}
+      WHERE ${BASE} AND ${inArea("f")}
       GROUP BY f.type
       HAVING fights >= @min
       ORDER BY CASE f.type WHEN 'monster' THEN 1 WHEN 'elite' THEN 2 ELSE 3 END`,
@@ -169,7 +177,7 @@ const TABS = {
              ROUND(AVG(f.turns), 1) AS avg_turns
       FROM fights f
       JOIN runs r ON r.run_id = f.run_id
-      WHERE ${BASE}
+      WHERE ${BASE} AND ${inArea("f")}
       GROUP BY f.encounter_id, f.type
       HAVING fights >= @min
       ORDER BY fights DESC, avg_damage_taken DESC`,
@@ -188,7 +196,7 @@ const TABS = {
         SELECT DISTINCT e.run_id, e.event_id AS event, r.win
         FROM events e
         JOIN runs r ON r.run_id = e.run_id
-        WHERE ${BASE}
+        WHERE ${BASE} AND ${inArea("e")}
       )
       GROUP BY event
       HAVING seen >= @min
@@ -206,7 +214,7 @@ const TABS = {
              ROUND(100.0 * SUM(r.win) / COUNT(*), 1) AS run_win_pct
       FROM events e
       JOIN runs r ON r.run_id = e.run_id
-      WHERE ${BASE}
+      WHERE ${BASE} AND ${inArea("e")}
       GROUP BY e.event_id, e.choice
       HAVING times >= @min
       ORDER BY times DESC`,
@@ -233,6 +241,7 @@ const TABS = {
           WHERE f2.run_id = r.run_id AND f2.encounter_id = r.killed_by
         )
       WHERE r.win = 0 AND r.killed_by IS NOT NULL AND ${BASE}
+        AND (@area IS NULL OR (f.act IS NOT NULL AND ${inArea("f")}))
       GROUP BY r.killed_by, f.type
       ORDER BY deaths DESC`,
   },

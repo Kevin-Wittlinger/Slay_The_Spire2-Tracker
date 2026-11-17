@@ -100,6 +100,11 @@ filters apply, and hovering a chart shows the win rate at any run.
 Character, ascension, **patch** (the game build a run was played on) and minimum sample filter every tab. They are
 kept in the page URL.
 
+The **area** filter (Overgrowth, Underdocks, Hive, Glory) keeps runs that actually entered that area. Overgrowth and
+Underdocks are the two alternatives for act 1. Enemy, boss and event tabs only count rooms fought inside that area.
+Areas come from the `acts` list in each `.run` file, so runs imported before this filter existed need their folder
+imported once more to pick up their areas (nothing is duplicated).
+
 ## Icons
 
 Character logos live in `public/img/characters/` and ascension flames (levels 0-10) in `public/img/ascension/`.

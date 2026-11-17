@@ -524,6 +524,15 @@ button.user-link:hover {
   display: block;
   max-width: none;
 }
+.fight-type {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+.fight-icon {
+  flex: none;
+  max-width: none;
+}
 .char-logo {
   display: block;
   max-width: none;

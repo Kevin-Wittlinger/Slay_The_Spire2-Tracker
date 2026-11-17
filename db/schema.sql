@@ -65,6 +65,15 @@ CREATE TABLE IF NOT EXISTS card_choices (
   picked   INTEGER NOT NULL
 );
 
+-- The area (act) each run passed through: OVERGROWTH or UNDERDOCKS, then HIVE, then GLORY.
+-- act is the 1-based act number, matching fights.act and events.act.
+CREATE TABLE IF NOT EXISTS run_acts (
+  run_id TEXT NOT NULL REFERENCES runs(run_id) ON DELETE CASCADE,
+  act    INTEGER NOT NULL,
+  area   TEXT NOT NULL,
+  PRIMARY KEY (run_id, act)
+);
+
 -- Every combat. died = 1 when HP reached 0 in that room.
 CREATE TABLE IF NOT EXISTS fights (
   run_id       TEXT NOT NULL REFERENCES runs(run_id) ON DELETE CASCADE,
@@ -88,6 +97,7 @@ CREATE TABLE IF NOT EXISTS events (
   choice   TEXT
 );
 
+CREATE INDEX IF NOT EXISTS idx_run_acts_area ON run_acts(area);
 CREATE INDEX IF NOT EXISTS idx_cards_card    ON run_cards(card_id);
 CREATE INDEX IF NOT EXISTS idx_cards_run     ON run_cards(run_id);
 CREATE INDEX IF NOT EXISTS idx_relics_relic  ON run_relics(relic_id);

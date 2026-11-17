@@ -64,6 +64,7 @@ function makeRun(index) {
     was_abandoned: abandoned,
     run_time: 900 + Math.floor(random() * 2400),
     build_id: pick(PATCHES),
+    acts: [random() < 0.5 ? "ACT.OVERGROWTH" : "ACT.UNDERDOCKS", "ACT.HIVE", "ACT.GLORY"],
     killed_by_encounter: win ? "NONE.NONE" : killer,
     killed_by_event: "NONE.NONE",
     players: [

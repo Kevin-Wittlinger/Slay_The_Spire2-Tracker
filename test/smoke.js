@@ -245,6 +245,64 @@ async function main() {
   ]);
   await patchDb.close();
 
+  // Area filter: runs are tagged with the acts they played (Overgrowth/Underdocks, Hive, Glory).
+  // Run-level stats keep runs that passed through the area; fights only count that area's rooms.
+  const areaDb = await openDb(":memory:");
+  const areaImporter = createImporter(areaDb);
+  const areaRun = (seed, acts, win, fights) => ({
+    ...makeRun({ seed }),
+    acts,
+    win,
+    map_point_history: fights.map((encounter) => [
+      {
+        map_point_type: "monster",
+        rooms: [{ room_type: "monster", model_id: encounter, monster_ids: [], turns_taken: 3 }],
+        player_stats: [{ damage_taken: 5, current_hp: 40 }],
+      },
+    ]),
+  });
+  const underdocksRun = areaRun("U", ["ACT.UNDERDOCKS", "ACT.HIVE"], false, [
+    "ENCOUNTER.BUG_A",
+    "ENCOUNTER.BUG_B",
+  ]);
+  const overgrowthRun = areaRun("O", ["ACT.OVERGROWTH", "ACT.HIVE", "ACT.GLORY"], true, [
+    "ENCOUNTER.PLANT",
+    "ENCOUNTER.BUG_C",
+    "ENCOUNTER.KNIGHT",
+  ]);
+  const areaProfile = 1;
+  await areaDb.execute({
+    sql: "INSERT INTO profiles (username, password_salt, password_hash, created_at) VALUES ('a', 's', 'h', 0)",
+    args: [],
+  });
+  await areaImporter.importRun(underdocksRun, areaProfile);
+  await areaImporter.importRun(overgrowthRun, areaProfile);
+  const areaRuns = async (area) =>
+    (await runQuery(areaDb, "overview", { area }))[0].runs;
+  assert.strictEqual(await areaRuns(null), 2);
+  assert.strictEqual(await areaRuns("UNDERDOCKS"), 1);
+  assert.strictEqual(await areaRuns("OVERGROWTH"), 1);
+  assert.strictEqual(await areaRuns("HIVE"), 2);
+  assert.strictEqual(await areaRuns("GLORY"), 1);
+  assert.strictEqual(await areaRuns("NOWHERE"), 0);
+  // Fights are limited to the chosen area's own act: act 1 = floors 1, act 2 = floor 2, ...
+  const fightCount = async (area) =>
+    (await runQuery(areaDb, "fight_types", { area })).reduce((n, r) => n + r.fights, 0);
+  assert.strictEqual(await fightCount(null), 5);
+  assert.strictEqual(await fightCount("UNDERDOCKS"), 1);
+  assert.strictEqual(await fightCount("HIVE"), 2);
+  assert.strictEqual(await fightCount("GLORY"), 1);
+  // Re-importing a run that was saved before areas were tracked fills the areas in.
+  await areaDb.execute("DELETE FROM run_acts");
+  assert.strictEqual(await areaRuns("HIVE"), 0);
+  assert.strictEqual((await areaImporter.importRun(overgrowthRun, areaProfile)).status, "duplicate");
+  assert.strictEqual(await areaRuns("GLORY"), 1);
+  // The API passes ?area= through and ignores anything that is not an area name.
+  const areaApi = createHandler(areaDb);
+  assert.strictEqual(JSON.parse((await dispatch(areaApi, "/api/stats/overview?area=GLORY")).body)[0].runs, 1);
+  assert.strictEqual(JSON.parse((await dispatch(areaApi, "/api/stats/overview?area=glory%27%3B--")).body)[0].runs, 2);
+  await areaDb.close();
+
   // Google Analytics: the tag is loaded from a file (inline scripts are blocked by the
   // Content-Security-Policy) and both CSPs must allow Google's domains, or it fails silently.
   const publicFile = (name) => require("fs").readFileSync(require("path").join(__dirname, "..", name), "utf8");
