@@ -328,6 +328,13 @@ function renderTrends(rows, host, options = {}) {
   const data = buildTrends(rows);
   const canSplit = !options.character && data.characters.length > 1;
   const mode = canSplit ? trendsState.mode : "overall";
+  // With one character in view (filtered, or the only one played) the lines take its colour,
+  // the same colour that character has in the By character view.
+  const soloCharacter =
+    options.character ||
+    (data.characters.length === 1 ? data.characters[0].character : null);
+  const colorAll = soloCharacter ? trendsColor(soloCharacter, 0) : COLOR_ALL;
+  const colorRecent = soloCharacter ? trendsColor(soloCharacter, 0) : COLOR_RECENT;
   const last = data.overall[data.total - 1];
   const start = Math.max(0, data.total - TRENDS_RECENT);
   const recentWins =
@@ -453,9 +460,9 @@ function renderTrends(rows, host, options = {}) {
       {
         title: "Win rate over all runs",
         subtitle: "after each run, from your first run to now",
-        swatchColor: mode === "overall" ? COLOR_ALL : null,
+        swatchColor: mode === "overall" ? colorAll : null,
         start: 0,
-        series: makeSeries((p) => p.rate, COLOR_ALL, "Win rate so far", 2.6),
+        series: makeSeries((p) => p.rate, colorAll, "Win rate so far", 2.6),
         detail: (p) => ` (${p.wins}/${p.n})`,
       },
       width,
@@ -465,11 +472,11 @@ function renderTrends(rows, host, options = {}) {
       {
         title: `Last ${recentRuns} runs`,
         subtitle: `each point is the win rate of the ${TRENDS_FORM} runs up to it`,
-        swatchColor: mode === "overall" ? COLOR_RECENT : null,
+        swatchColor: mode === "overall" ? colorRecent : null,
         start,
         series: makeSeries(
           (p) => p.form,
-          COLOR_RECENT,
+          colorRecent,
           `Last ${TRENDS_FORM} runs`,
           2.6,
         ),
