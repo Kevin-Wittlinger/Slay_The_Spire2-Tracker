@@ -422,14 +422,24 @@ button.user-link:hover {
 }
 .playrate-row {
   display: grid;
-  grid-template-columns: 130px minmax(0, 1fr) 130px;
+  grid-template-columns: 44px minmax(0, 1fr) 130px;
   align-items: center;
   gap: 12px;
 }
 .playrate-name {
   display: flex;
   align-items: center;
+  justify-content: center;
   min-width: 0;
+}
+.playrate-head {
+  display: block;
+  height: 30px;
+  width: auto;
+  max-width: none;
+}
+.playrate-row.dim {
+  opacity: 0.4;
 }
 .playrate-track {
   height: 16px;
@@ -452,7 +462,7 @@ button.user-link:hover {
 }
 @media (max-width: 560px) {
   .playrate-row {
-    grid-template-columns: 90px minmax(0, 1fr);
+    grid-template-columns: 44px minmax(0, 1fr);
   }
   .playrate-value {
     grid-column: 2;

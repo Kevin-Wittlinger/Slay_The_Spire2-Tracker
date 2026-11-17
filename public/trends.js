@@ -309,26 +309,54 @@ function drawChart(data, config, width) {
   );
 }
 
+// Character head icon (public/img/heads/<name>.png), or the name when there is none.
+function characterHead(character) {
+  const slug = typeof characterSlug === "function" ? characterSlug(character) : "";
+  if (!/^[a-z]+$/.test(slug) || !TRENDS_COLORS[slug]) return pretty(character);
+  return el("img", {
+    class: "playrate-head",
+    src: `img/heads/${slug}.png`,
+    alt: pretty(character),
+    title: pretty(character),
+    loading: "lazy",
+  });
+}
+
 // Bar chart: what share of the runs in view each character was played in, in the usual
 // character order. Plain HTML bars (width set through a CSS variable, which the CSP allows).
-function playRateChart(data) {
-  const rows = data.characters.map((c, index) => {
-    const share = (100 * c.n) / data.total;
+// options.allRows holds everyone's runs when a single character is filtered, so all the
+// characters still show and the picked one is highlighted. In By character mode, characters
+// hidden in the legend leave the chart and the shares are worked out among those left.
+function playRateChart(data, options, mode) {
+  const counts = new Map();
+  if (options.allRows) {
+    for (const row of options.allRows)
+      counts.set(row.character, (counts.get(row.character) || 0) + 1);
+  } else {
+    for (const c of data.characters) counts.set(c.character, c.n);
+  }
+  const order = typeof sortCharacters === "function" ? sortCharacters : (list) => [...list].sort();
+  const shown = order([...counts.keys()]).filter(
+    (id) => mode !== "split" || !trendsState.hidden.has(id),
+  );
+  const total = shown.reduce((sum, id) => sum + counts.get(id), 0);
+  if (shown.length < 2 || !total) return null;
+  const rows = shown.map((id, index) => {
+    const c = { character: id, n: counts.get(id) };
+    const share = (100 * c.n) / total;
     const bar = el("span", { class: "playrate-bar" });
     bar.style.setProperty("--w", `${share}%`);
     bar.style.setProperty("--c", trendsColor(c.character, index));
     return el(
       "div",
       {
-        class: "playrate-row",
-        title: `${pretty(c.character)}: ${c.n} of ${data.total} runs`,
+        class:
+          options.character && options.character !== c.character
+            ? "playrate-row dim"
+            : "playrate-row",
+        title: `${pretty(c.character)}: ${c.n} of ${total} runs`,
       },
-      el(
-        "span",
-        { class: "playrate-name" },
-        (typeof characterLogo === "function" && characterLogo(c.character, 0.5)) ||
-          pretty(c.character),
-      ),
+      el("span", { class: "playrate-name" }, characterHead(c.character)),
       el("span", { class: "playrate-track" }, bar),
       el("span", {
         class: "playrate-value",
@@ -345,7 +373,7 @@ function playRateChart(data) {
       "Play rate",
       el("span", {
         class: "trend-sub",
-        text: `share of your ${nf.format(data.total)} runs played with each character`,
+        text: `share of your ${nf.format(total)} runs played with each character`,
       }),
     ),
     el("div", { class: "playrate" }, ...rows),
@@ -450,7 +478,7 @@ function renderTrends(rows, host, options = {}) {
           class: "legend-item",
           "data-key": `legend:${c.character}`,
           "aria-pressed": String(!off),
-          title: "Click to hide or show this character's line",
+          title: "Click to hide or show this character in both charts",
         },
         swatch(color),
         logo || pretty(c.character),
@@ -509,7 +537,7 @@ function renderTrends(rows, host, options = {}) {
       width,
     ),
     // Play rate only means something when several characters are in view.
-    ...(data.characters.length > 1 ? [playRateChart(data)] : []),
+    ...[playRateChart(data, options, mode)].filter(Boolean),
     el("p", {
       class: "hint",
       text:

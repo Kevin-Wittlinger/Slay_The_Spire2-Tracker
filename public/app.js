@@ -355,9 +355,10 @@ function scopeParams(params = new URLSearchParams()) {
   return params;
 }
 
-function statsQuery() {
+// allCharacters: leave the character filter out (the Trends play-rate chart always compares them).
+function statsQuery({ allCharacters = false } = {}) {
   const params = new URLSearchParams();
-  if ($("fChar").value) params.set("character", $("fChar").value);
+  if ($("fChar").value && !allCharacters) params.set("character", $("fChar").value);
   if ($("fAsc").value) params.set("ascension", $("fAsc").value);
   if ($("fPatch").value) params.set("patch", $("fPatch").value);
   if ($("fArea").value) params.set("area", $("fArea").value);
@@ -682,11 +683,17 @@ async function renderView(loadId) {
   host.setAttribute("aria-busy", "true");
   host.classList.add("loading");
   try {
-    const rows = await api(`/api/stats/${state.tab}?${statsQuery()}`);
-    if (loadId !== state.loadId) return;
     const tab = state.tabs.find((t) => t.id === state.tab);
-    if (tab?.kind === "trends")
-      renderTrends(rows, host, { character: $("fChar").value });
+    const character = $("fChar").value;
+    // With one character picked, the play-rate chart still needs everyone's runs (same other filters).
+    const [rows, allRows] = await Promise.all([
+      api(`/api/stats/${state.tab}?${statsQuery()}`),
+      tab?.kind === "trends" && character
+        ? api(`/api/stats/${state.tab}?${statsQuery({ allCharacters: true })}`)
+        : null,
+    ]);
+    if (loadId !== state.loadId) return;
+    if (tab?.kind === "trends") renderTrends(rows, host, { character, allRows });
     else renderTable(rows, host);
   } catch (error) {
     if (loadId !== state.loadId) return;
