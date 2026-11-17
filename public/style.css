@@ -422,7 +422,7 @@ button.user-link:hover {
 }
 .playrate-row {
   display: grid;
-  grid-template-columns: 44px minmax(0, 1fr) 130px;
+  grid-template-columns: 40px minmax(0, 1fr) 124px;
   align-items: center;
   gap: 12px;
 }
@@ -462,7 +462,7 @@ button.user-link:hover {
 }
 @media (max-width: 560px) {
   .playrate-row {
-    grid-template-columns: 44px minmax(0, 1fr);
+    grid-template-columns: 40px minmax(0, 1fr);
   }
   .playrate-value {
     grid-column: 2;
