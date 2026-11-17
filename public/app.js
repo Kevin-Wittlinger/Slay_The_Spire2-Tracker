@@ -17,6 +17,7 @@ const state = {
 
 const COLUMN_LABELS = {
   win_pct: "Win %",
+  clear_pct: "Clear %",
   pick_pct: "Pick %",
   run_win_pct: "Run win %",
   avg_damage_taken: "Avg damage",

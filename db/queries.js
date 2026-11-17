@@ -148,6 +148,37 @@ const TABS = {
       ORDER BY win_pct DESC, runs DESC`,
   },
 
+  areas: {
+    title: "Areas",
+    // How often each area is beaten. A run enters an area when it has rooms there. It clears it by
+    // entering the next act, or by winning (the last act has no next one). So Overgrowth and
+    // Underdocks (both act 1) each lead on to Hive, and the route a run took doesn't matter.
+    sql: `
+      SELECT CASE t.area
+               WHEN 'OVERGROWTH' THEN 'Overgrowth'
+               WHEN 'UNDERDOCKS' THEN 'Underdocks'
+               WHEN 'HIVE' THEN 'Hive'
+               WHEN 'GLORY' THEN 'Glory'
+               ELSE t.area
+             END AS area,
+             COUNT(*) AS entered,
+             SUM(cleared) AS cleared,
+             COUNT(*) - SUM(cleared) AS failed,
+             ROUND(100.0 * SUM(cleared) / COUNT(*), 1) AS clear_pct
+      FROM (
+        SELECT a.area, a.act,
+               CASE WHEN r.win = 1 OR EXISTS (
+                 SELECT 1 FROM run_acts n WHERE n.run_id = a.run_id AND n.act = a.act + 1
+               ) THEN 1 ELSE 0 END AS cleared
+        FROM run_acts a
+        JOIN runs r ON r.run_id = a.run_id
+        WHERE ${BASE}
+      ) t
+      GROUP BY t.act, t.area
+      HAVING entered >= @min
+      ORDER BY t.act, t.area`,
+  },
+
   fight_types: {
     title: "Normal / Elite / Boss",
     sql: `

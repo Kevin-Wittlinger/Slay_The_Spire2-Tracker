@@ -292,6 +292,23 @@ async function main() {
   assert.strictEqual(await fightCount("UNDERDOCKS"), 1);
   assert.strictEqual(await fightCount("HIVE"), 2);
   assert.strictEqual(await fightCount("GLORY"), 1);
+  // Areas tab: clearing an area = entering the next act (or winning). U died in Hive (2 acts),
+  // O won (3 acts), so Underdocks 1/1, Overgrowth 1/1, Hive 1/2, Glory 1/1.
+  const areaRows = Object.fromEntries(
+    (await runQuery(areaDb, "areas", {})).map((r) => [r.area, [r.entered, r.cleared, r.clear_pct]]),
+  );
+  assert.deepStrictEqual(areaRows, {
+    Overgrowth: [1, 1, 100],
+    Underdocks: [1, 1, 100],
+    Hive: [2, 1, 50],
+    Glory: [1, 1, 100],
+  });
+  assert.deepStrictEqual((await runQuery(areaDb, "areas", {})).map((r) => r.area), [
+    "Overgrowth",
+    "Underdocks",
+    "Hive",
+    "Glory",
+  ]);
   // Re-importing a run that was saved before areas were tracked fills the areas in.
   await areaDb.execute("DELETE FROM run_acts");
   assert.strictEqual(await areaRuns("HIVE"), 0);
