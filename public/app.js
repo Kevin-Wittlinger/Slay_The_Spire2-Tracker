@@ -193,14 +193,19 @@ function fightTypeCell(value) {
   if (!info) return null;
   const wrap = el("span", { class: "fight-type" });
   wrap.append(
-    el("img", {
-      class: "fight-icon",
-      src: `img/fights/${info[0]}.png`,
-      alt: "",
-      width: info[1],
-      height: info[2],
-      loading: "lazy",
-    }),
+    // Fixed-width slot so the text starts at the same spot whatever the icon width.
+    el(
+      "span",
+      { class: "fight-icon-slot" },
+      el("img", {
+        class: "fight-icon",
+        src: `img/fights/${info[0]}.png`,
+        alt: "",
+        width: info[1],
+        height: info[2],
+        loading: "lazy",
+      }),
+    ),
     el("span", { text: formatCell(value, "type") }),
   );
   return wrap;

@@ -529,8 +529,16 @@ button.user-link:hover {
   align-items: center;
   gap: 8px;
 }
-.fight-icon {
+.fight-icon-slot {
+  display: flex;
   flex: none;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  height: 44px;
+}
+.fight-icon {
+  display: block;
   max-width: none;
 }
 .char-logo {
