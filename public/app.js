@@ -451,11 +451,6 @@ function swapView(host, ...nodes) {
   setTimeout(() => host.style.removeProperty("min-height"), 60);
 }
 
-// What the user typed or picked in the table toolbar (search, dropdown filters, sort order).
-// Kept while they stay on the same tab, so changing the character or another filter reloads the
-// rows without wiping their search. Stored by column name; switching tabs clears it.
-let tableMemory = null;
-
 function renderTable(rows, host) {
   if (!rows.length) {
     swapView(host, el("div", { class: "empty", text: emptyMessage() }));
@@ -474,22 +469,10 @@ function renderTable(rows, host) {
     }
     return cells;
   });
-  if (!tableMemory || tableMemory.tab !== state.tab)
-    tableMemory = { tab: state.tab, search: "", selected: new Map(), sortCol: null, ascending: false };
   const selected = new Map(); // column index -> chosen value
-  for (const [name, value] of tableMemory.selected) {
-    const i = cols.indexOf(name);
-    if (i >= 0) selected.set(i, value);
-  }
-  let sortCol = cols.indexOf(tableMemory.sortCol); // -1 = default order
-  let ascending = sortCol >= 0 && tableMemory.ascending;
-  let search = tableMemory.search;
-  const remember = () => {
-    tableMemory.search = search;
-    tableMemory.selected = new Map([...selected].map(([i, value]) => [cols[i], value]));
-    tableMemory.sortCol = sortCol >= 0 ? cols[sortCol] : null;
-    tableMemory.ascending = ascending;
-  };
+  let sortCol = -1;
+  let ascending = false;
+  let search = "";
   // Default order: alphabetical on some tabs, otherwise the order the server sent.
   const defaultCol = cols.indexOf(ALPHABETICAL_TABS[state.tab]);
 
@@ -498,7 +481,6 @@ function renderTable(rows, host) {
   const headerCells = [];
 
   function draw() {
-    remember();
     const needle = search.trim().toLowerCase();
     const visible = data.filter(
       (row) =>
@@ -576,7 +558,6 @@ function renderTable(rows, host) {
     type: "search",
     placeholder: "Search this table...",
     "aria-label": "Search this table",
-    value: search,
   });
   searchInput.addEventListener("input", () => {
     search = searchInput.value;
@@ -630,10 +611,6 @@ function renderTable(rows, host) {
         el("option", { value: String(value), text: pretty(String(value)) }),
       ),
     );
-    // Re-apply the remembered choice, unless this data no longer offers that value.
-    if (selected.has(i) && values.map(String).includes(selected.get(i)))
-      select.value = selected.get(i);
-    else selected.delete(i);
     select.addEventListener("change", () => {
       if (select.value) selected.set(i, select.value);
       else selected.delete(i);
@@ -642,8 +619,6 @@ function renderTable(rows, host) {
     toolbar.append(select);
   });
   toolbar.append(count);
-  // A remembered filter on a column that now has no dropdown (too few values) can't be cleared, so drop it.
-  for (const i of [...selected.keys()]) if (!toolbar.querySelector(`select[aria-label="Filter by ${columnLabel(cols[i])}"]`)) selected.delete(i);
 
   draw();
   swapView(
@@ -790,7 +765,6 @@ function renderTabs() {
         text: tab.title,
         onclick: () => {
           state.tab = tab.id;
-          tableMemory = null;
           renderTabs();
           refreshStats();
         },
