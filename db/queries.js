@@ -82,18 +82,6 @@ const TABS = {
       ORDER BY r.ascension`,
   },
 
-  trends: {
-    title: "Trends",
-    kind: "trends", // drawn as a line chart by public/trends.js instead of a table
-    // One row per run, oldest first. The page works out the win rate over time.
-    sql: `
-      SELECT r.start_time, r.character, r.win
-      FROM runs r
-      WHERE ${BASE}
-      ORDER BY COALESCE(r.start_time, 0), r.run_id
-      LIMIT 20000`,
-  },
-
   card_win_rate: {
     title: "Card WR",
     // A run counts once per card, no matter how many copies were in the final deck.
@@ -295,6 +283,18 @@ const TABS = {
       WHERE r.abandoned = 0 AND ${FILTER} AND ${PROFILE_FILTER}
       ORDER BY r.start_time DESC
       LIMIT 100`,
+  },
+
+  trends: {
+    title: "Trends",
+    kind: "trends", // drawn as a line chart by public/trends.js instead of a table
+    // One row per run, oldest first. The page works out the win rate over time.
+    sql: `
+      SELECT r.start_time, r.character, r.win
+      FROM runs r
+      WHERE ${BASE}
+      ORDER BY COALESCE(r.start_time, 0), r.run_id
+      LIMIT 20000`,
   },
 };
 

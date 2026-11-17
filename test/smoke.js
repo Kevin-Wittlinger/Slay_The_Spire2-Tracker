@@ -320,6 +320,15 @@ async function main() {
   assert.strictEqual(JSON.parse((await dispatch(areaApi, "/api/stats/overview?area=glory%27%3B--")).body)[0].runs, 2);
   await areaDb.close();
 
+  // Caching: shared statistics may be cached briefly, anything tied to the signed-in user never.
+  const cacheApi = createHandler(await openDb(":memory:"));
+  const cacheOf = async (url) => (await dispatch(cacheApi, url)).headers["Cache-Control"];
+  assert.match(await cacheOf("/api/stats/characters"), /s-maxage=60/);
+  assert.match(await cacheOf("/api/filters"), /s-maxage=60/);
+  assert.strictEqual(await cacheOf("/api/stats/characters?scope=profile"), "no-store");
+  assert.strictEqual(await cacheOf("/api/status"), "no-store");
+  assert.strictEqual(await cacheOf("/api/stats/nothing"), "no-store");
+
   // Google Analytics: the tag is loaded from a file (inline scripts are blocked by the
   // Content-Security-Policy) and both CSPs must allow Google's domains, or it fails silently.
   const publicFile = (name) => require("fs").readFileSync(require("path").join(__dirname, "..", name), "utf8");

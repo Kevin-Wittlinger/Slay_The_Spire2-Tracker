@@ -12,6 +12,7 @@ const state = {
   accountMode: "login",
   importing: false,
   loadId: 0, // guards against out-of-order responses
+  dataVersion: 0, // set after an import; sent as ?v= so cached statistics are skipped
   lastRefresh: 0,
 };
 
@@ -350,6 +351,7 @@ function scopeParams(params = new URLSearchParams()) {
     params.set("scope", "profile");
     params.set("profileId", state.view.profile.id);
   }
+  if (state.dataVersion) params.set("v", state.dataVersion);
   return params;
 }
 
@@ -958,6 +960,7 @@ async function importFiles(files) {
       body: JSON.stringify(batch),
     });
     for (const key of Object.keys(totals)) totals[key] += result[key] || 0;
+    state.dataVersion = Date.now();
     batch = [];
     batchBytes = 2;
   };

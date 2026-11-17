@@ -98,6 +98,9 @@ CREATE TABLE IF NOT EXISTS events (
 );
 
 CREATE INDEX IF NOT EXISTS idx_run_acts_area ON run_acts(area);
+-- Speed up the statistics queries, which join these tables to runs by run_id.
+CREATE INDEX IF NOT EXISTS idx_choices_run    ON card_choices(run_id);
+CREATE INDEX IF NOT EXISTS idx_runs_abandoned ON runs(abandoned);
 CREATE INDEX IF NOT EXISTS idx_cards_card    ON run_cards(card_id);
 CREATE INDEX IF NOT EXISTS idx_cards_run     ON run_cards(run_id);
 CREATE INDEX IF NOT EXISTS idx_relics_relic  ON run_relics(relic_id);
