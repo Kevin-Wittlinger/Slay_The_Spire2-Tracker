@@ -18,7 +18,6 @@ const TRENDS_COLORS = {
 };
 const TRENDS_SPARE_COLORS = ["#9aa7ff", "#ffb38a", "#7fe0c2", "#e3d36b"];
 const COLOR_ALL = "#e0b04a";
-const COLOR_RECENT = "#6ab0ff";
 
 const trendsState = { mode: "overall", hidden: new Set(), last: null };
 
@@ -310,6 +309,49 @@ function drawChart(data, config, width) {
   );
 }
 
+// Bar chart: what share of the runs in view each character was played in, in the usual
+// character order. Plain HTML bars (width set through a CSS variable, which the CSP allows).
+function playRateChart(data) {
+  const rows = data.characters.map((c, index) => {
+    const share = (100 * c.n) / data.total;
+    const bar = el("span", { class: "playrate-bar" });
+    bar.style.setProperty("--w", `${share}%`);
+    bar.style.setProperty("--c", trendsColor(c.character, index));
+    return el(
+      "div",
+      {
+        class: "playrate-row",
+        title: `${pretty(c.character)}: ${c.n} of ${data.total} runs`,
+      },
+      el(
+        "span",
+        { class: "playrate-name" },
+        (typeof characterLogo === "function" && characterLogo(c.character, 0.5)) ||
+          pretty(c.character),
+      ),
+      el("span", { class: "playrate-track" }, bar),
+      el("span", {
+        class: "playrate-value",
+        text: `${pct1(share)} · ${nf.format(c.n)} ${c.n === 1 ? "run" : "runs"}`,
+      }),
+    );
+  });
+  return el(
+    "section",
+    { class: "trend-chart" },
+    el(
+      "h3",
+      { class: "trend-title" },
+      "Play rate",
+      el("span", {
+        class: "trend-sub",
+        text: `share of your ${nf.format(data.total)} runs played with each character`,
+      }),
+    ),
+    el("div", { class: "playrate" }, ...rows),
+  );
+}
+
 function renderTrends(rows, host, options = {}) {
   trendsState.last = { rows, host, options };
   if (rows.length < 2) {
@@ -334,12 +376,11 @@ function renderTrends(rows, host, options = {}) {
     options.character ||
     (data.characters.length === 1 ? data.characters[0].character : null);
   const colorAll = soloCharacter ? trendsColor(soloCharacter, 0) : COLOR_ALL;
-  const colorRecent = soloCharacter ? trendsColor(soloCharacter, 0) : COLOR_RECENT;
   const last = data.overall[data.total - 1];
   const start = Math.max(0, data.total - TRENDS_RECENT);
   const recentWins =
     last.wins - (start ? data.overall[start - 1].wins : 0);
-  const recentRuns = data.total - start;
+  const recentRuns = data.total - start; // the "over the last N" figure in the summary
   // Redraw in place (swapView keeps the scroll position); keep keyboard focus on the clicked button.
   const rerender = (focusKey) => {
     renderTrends(rows, host, options);
@@ -409,7 +450,7 @@ function renderTrends(rows, host, options = {}) {
           class: "legend-item",
           "data-key": `legend:${c.character}`,
           "aria-pressed": String(!off),
-          title: "Click to hide or show this character in both charts",
+          title: "Click to hide or show this character's line",
         },
         swatch(color),
         logo || pretty(c.character),
@@ -467,29 +508,14 @@ function renderTrends(rows, host, options = {}) {
       },
       width,
     ),
-    drawChart(
-      data,
-      {
-        title: `Last ${recentRuns} runs`,
-        subtitle: `each point is the win rate of the ${TRENDS_FORM} runs up to it`,
-        swatchColor: mode === "overall" ? colorRecent : null,
-        start,
-        series: makeSeries(
-          (p) => p.form,
-          colorRecent,
-          `Last ${TRENDS_FORM} runs`,
-          2.6,
-        ),
-        detail: (p) => ` (last ${p.formRuns})`,
-      },
-      width,
-    ),
+    // Play rate only means something when several characters are in view.
+    ...(data.characters.length > 1 ? [playRateChart(data)] : []),
     el("p", {
       class: "hint",
       text:
         canSplit && mode === "overall"
           ? "Use the filters above to narrow by character, ascension or patch, or switch to By character to compare them."
-          : "Use the filters above to narrow by ascension or patch. Hover a chart for exact numbers.",
+          : "Use the filters above to narrow by ascension or patch. Hover the chart for exact numbers.",
     }),
   );
   swapView(host, wrap);

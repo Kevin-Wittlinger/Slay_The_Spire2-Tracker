@@ -415,6 +415,50 @@ button.user-link:hover {
   padding-top: 14px;
   border-top: 1px solid var(--line);
 }
+.playrate {
+  display: grid;
+  gap: 10px;
+  margin-top: 12px;
+}
+.playrate-row {
+  display: grid;
+  grid-template-columns: 130px minmax(0, 1fr) 130px;
+  align-items: center;
+  gap: 12px;
+}
+.playrate-name {
+  display: flex;
+  align-items: center;
+  min-width: 0;
+}
+.playrate-track {
+  height: 16px;
+  border-radius: 4px;
+  background: var(--panel-2);
+  overflow: hidden;
+}
+.playrate-bar {
+  display: block;
+  height: 100%;
+  width: var(--w);
+  background: var(--c);
+  border-radius: 4px;
+}
+.playrate-value {
+  color: var(--dim);
+  font-size: 12px;
+  text-align: right;
+  white-space: nowrap;
+}
+@media (max-width: 560px) {
+  .playrate-row {
+    grid-template-columns: 90px minmax(0, 1fr);
+  }
+  .playrate-value {
+    grid-column: 2;
+    text-align: left;
+  }
+}
 .trend-title {
   display: flex;
   flex-wrap: wrap;
