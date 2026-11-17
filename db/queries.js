@@ -95,7 +95,7 @@ const TABS = {
   },
 
   card_win_rate: {
-    title: "Card win rate",
+    title: "Card WR",
     // A run counts once per card, no matter how many copies were in the final deck.
     // floor_added > 1 leaves out the starting deck.
     sql: `
@@ -131,7 +131,7 @@ const TABS = {
   },
 
   relic_win_rate: {
-    title: "Relic win rate",
+    title: "Relic WR",
     sql: `
       SELECT relic,
              COUNT(*) AS runs,
