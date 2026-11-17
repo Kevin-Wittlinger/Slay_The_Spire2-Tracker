@@ -102,8 +102,10 @@ kept in the page URL.
 
 The **area** filter (Overgrowth, Underdocks, Hive, Glory) keeps runs that actually entered that area. Overgrowth and
 Underdocks are the two alternatives for act 1. Enemy, boss and event tabs only count rooms fought inside that area.
-Areas come from the `acts` list in each `.run` file, so runs imported before this filter existed need their folder
-imported once more to pick up their areas (nothing is duplicated).
+Areas come from the `acts` list in each `.run` file. Runs imported before this filter existed get their areas
+worked out when the server starts (`lib/areas.js`): acts 2 and 3 are Hive and Glory, and act 1 is Overgrowth or Underdocks
+depending on which act-1 enemies the run fought, learned from runs that already have their areas. A run whose enemies
+are unknown is skipped until its folder is imported again (nothing is duplicated).
 
 ## Icons
 

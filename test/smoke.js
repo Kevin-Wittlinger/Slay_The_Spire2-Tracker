@@ -309,6 +309,26 @@ async function main() {
     "Hive",
     "Glory",
   ]);
+  // Backfill: runs imported before areas existed get them from what the learned enemies say.
+  // V is an Overgrowth run (PLANT is known from O); W only fought an enemy nobody has tagged.
+  const { backfillAreas } = require("../lib/areas");
+  const vRun = areaRun("V", ["ACT.OVERGROWTH", "ACT.HIVE", "ACT.GLORY"], true, [
+    "ENCOUNTER.PLANT",
+    "ENCOUNTER.BUG_C",
+    "ENCOUNTER.KNIGHT",
+  ]);
+  const wRun = areaRun("W", ["ACT.UNDERDOCKS", "ACT.HIVE"], false, ["ENCOUNTER.NEVER_SEEN", "ENCOUNTER.BUG_B"]);
+  await areaImporter.importRun(vRun, areaProfile);
+  await areaImporter.importRun(wRun, areaProfile);
+  await areaDb.execute("DELETE FROM run_acts WHERE run_id LIKE 'V:%' OR run_id LIKE 'W:%'");
+  assert.ok((await backfillAreas(areaDb)) > 0);
+  const areasOf = async (prefix) =>
+    (await areaDb.execute({ sql: "SELECT area FROM run_acts WHERE run_id LIKE ? ORDER BY act", args: [prefix + ":%"] })).rows.map((r) => r.area);
+  assert.deepStrictEqual(await areasOf("V"), ["OVERGROWTH", "HIVE", "GLORY"]);
+  assert.deepStrictEqual(await areasOf("W"), []); // unknown enemy: left alone, not guessed
+  assert.strictEqual(await backfillAreas(areaDb), 0); // nothing left that can be worked out
+  await areaDb.execute("DELETE FROM runs WHERE run_id LIKE 'V:%' OR run_id LIKE 'W:%'");
+
   // Re-importing a run that was saved before areas were tracked fills the areas in.
   await areaDb.execute("DELETE FROM run_acts");
   assert.strictEqual(await areaRuns("HIVE"), 0);
