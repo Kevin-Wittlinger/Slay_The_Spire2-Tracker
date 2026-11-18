@@ -53,7 +53,8 @@ CREATE TABLE IF NOT EXISTS run_cards (
 CREATE TABLE IF NOT EXISTS run_relics (
   run_id      TEXT NOT NULL REFERENCES runs(run_id) ON DELETE CASCADE,
   relic_id    TEXT NOT NULL,
-  floor_added INTEGER NOT NULL DEFAULT 0
+  floor_added INTEGER NOT NULL DEFAULT 0,
+  source      TEXT                           -- NEOW | ANCIENT | OTHER (see lib/relics.js)
 );
 
 -- Every card reward / shop offer and whether it was taken.

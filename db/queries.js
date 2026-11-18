@@ -1,5 +1,5 @@
 // Every statistic on the site is one SQL query in this file.
-// Named parameters: @character, @ascension, @patch and @area (NULL = no filter), @min (minimum sample size).
+// Named parameters: @character, @ascension, @patch and @area (NULL = no filter; @source only filters Relic WR), @min (minimum sample size).
 // Abandoned runs are excluded everywhere. Multiplayer runs never reach the database.
 const { rowsToObjects } = require("../lib/db");
 
@@ -20,15 +20,7 @@ const PROFILE_FILTER = `(@profileId IS NULL OR EXISTS (
 const BASE = `r.abandoned = 0 AND ${FILTER} AND ${PROFILE_FILTER}`;
 
 // Every character begins with one of these, so they say nothing about a run. Left out of relic stats.
-const STARTING_RELICS = [
-  "RELIC.BURNING_BLOOD",
-  "RELIC.RING_OF_THE_SNAKE",
-  "RELIC.DIVINE_RIGHT",
-  "RELIC.BOUND_PHYLACTERY",
-  "RELIC.CRACKED_CORE",
-  "RELIC.SONG_BOW",
-];
-const STARTING_RELIC_LIST = STARTING_RELICS.map((id) => `'${id}'`).join(", ");
+const { STARTING_RELIC_LIST } = require("../lib/relics");
 
 const TABS = {
   overview: {
@@ -130,6 +122,7 @@ const TABS = {
         FROM run_relics x
         JOIN runs r ON r.run_id = x.run_id
         WHERE x.relic_id NOT IN (${STARTING_RELIC_LIST}) AND ${BASE}
+          AND (@source IS NULL OR x.source = @source)
       )
       GROUP BY relic
       HAVING runs >= @min

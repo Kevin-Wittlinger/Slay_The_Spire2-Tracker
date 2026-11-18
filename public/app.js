@@ -319,6 +319,7 @@ function writeHash() {
   if ($("fAsc").value) params.set("ascension", $("fAsc").value);
   if ($("fPatch").value) params.set("patch", $("fPatch").value);
   if ($("fArea").value) params.set("area", $("fArea").value);
+  if ($("fSource").value && state.tab === "relic_win_rate") params.set("source", $("fSource").value);
   if (Number($("fMin").value) > 1) params.set("min", $("fMin").value);
   if (trendsState.mode === "split") params.set("trend", "split");
   history.replaceState(null, "", `#${params}`);
@@ -339,7 +340,7 @@ function readHash() {
   } else if (view === "me") {
     initial.view = { scope: "me" };
   }
-  for (const key of ["character", "ascension", "patch", "area", "min"]) {
+  for (const key of ["character", "ascension", "patch", "area", "source", "min"]) {
     if (params.get(key)) initial.filters[key] = params.get(key);
   }
   return initial;
@@ -362,6 +363,7 @@ function statsQuery({ allCharacters = false } = {}) {
   if ($("fAsc").value) params.set("ascension", $("fAsc").value);
   if ($("fPatch").value) params.set("patch", $("fPatch").value);
   if ($("fArea").value) params.set("area", $("fArea").value);
+  if ($("fSource").value && state.tab === "relic_win_rate") params.set("source", $("fSource").value);
   params.set("min", Math.max(1, Number($("fMin").value) || 1));
   return scopeParams(params).toString();
 }
@@ -430,6 +432,7 @@ function emptyMessage() {
     $("fAsc").value ||
     $("fPatch").value ||
     $("fArea").value ||
+    (state.tab === "relic_win_rate" && $("fSource").value) ||
     Number($("fMin").value) > 1;
   if (filtered)
     return "Nothing matches these filters. Try lowering the minimum sample or resetting the filters.";
@@ -789,7 +792,21 @@ function refreshStats() {
 }
 
 // ---------- tabs ----------
+// Where a relic came from, as stored in run_relics.source. Only the Relic WR tab uses it.
+const RELIC_SOURCES = { NEOW: "Neow", ANCIENT: "Ancients", OTHER: "Other relics" };
+
+function syncSourceFilter() {
+  const select = $("fSource");
+  if (!select.options.length)
+    select.replaceChildren(
+      el("option", { value: "", text: "All relics" }),
+      ...Object.entries(RELIC_SOURCES).map(([value, text]) => el("option", { value, text })),
+    );
+  $("sourceFilter").hidden = state.tab !== "relic_win_rate";
+}
+
 function renderTabs() {
+  syncSourceFilter();
   $("tabs").replaceChildren(
     ...state.tabs.map((tab) =>
       el("button", {
@@ -1048,6 +1065,7 @@ function resetFilters() {
   $("fAsc").value = "";
   $("fPatch").value = "";
   $("fArea").value = "";
+  $("fSource").value = "";
   $("fMin").value = 1;
   refreshStats();
 }
@@ -1071,6 +1089,7 @@ function wireEvents() {
   $("fAsc").addEventListener("change", onFilter);
   $("fPatch").addEventListener("change", onFilter);
   $("fArea").addEventListener("change", onFilter);
+  $("fSource").addEventListener("change", onFilter);
   $("fMin").addEventListener("input", debounce(onFilter, 300));
   $("resetFilters").addEventListener("click", resetFilters);
 
@@ -1164,7 +1183,7 @@ async function main() {
     state.view = { scope: "profile", profile: state.me };
 
   // Filter dropdowns are filled from the server; seed values from the URL first.
-  const { character, ascension, patch, area, min } = initial.filters;
+  const { character, ascension, patch, area, source, min } = initial.filters;
   $("fMin").value = min || 1;
   renderScope();
   renderTabs();
@@ -1176,6 +1195,7 @@ async function main() {
   if (ascension) $("fAsc").value = ascension;
   if (patch) $("fPatch").value = patch;
   if (area) $("fArea").value = area;
+  if (source && Object.hasOwn(RELIC_SOURCES, source)) $("fSource").value = source;
   await refresh();
 }
 
