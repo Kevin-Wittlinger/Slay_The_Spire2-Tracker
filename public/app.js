@@ -190,6 +190,23 @@ function characterLogo(value, scale = 1) {
 }
 
 // Icon plus the usual text, so the type is still readable and searchable. Null for other values.
+// Relic icon + name. Icons come from the Slay the Spire wiki, saved as img/relics/<id>.png
+// (RELIC.BURNING_BLOOD -> burning_blood.png). A relic without an icon just shows its name.
+function relicCell(value) {
+  const match = typeof value === "string" && value.match(/^RELIC\.([A-Z0-9_]+)$/);
+  if (!match) return null;
+  const img = el("img", {
+    class: "relic-icon",
+    src: `img/relics/${match[1].toLowerCase()}.png`,
+    alt: "",
+    width: 32,
+    height: 32,
+    loading: "lazy",
+  });
+  img.addEventListener("error", () => img.remove(), { once: true });
+  return el("span", { class: "relic-cell" }, img, el("span", { text: formatCell(value, "relic") }));
+}
+
 function fightTypeCell(value) {
   const info = typeof value === "string" ? FIGHT_ICONS[value.toLowerCase()] : null;
   if (!info) return null;
@@ -564,7 +581,8 @@ function renderTable(rows, host) {
                   : ASCENSION_COLUMNS.has(col)
                     ? ascensionIcon(value)
                     : null;
-              const typeCell = col === "type" ? fightTypeCell(value) : null;
+              const typeCell =
+                col === "type" ? fightTypeCell(value) : col === "relic" ? relicCell(value) : null;
               if (logo) td.append(logo);
               else if (typeCell) td.append(typeCell);
               else td.textContent = formatCell(value, col);
