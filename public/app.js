@@ -464,7 +464,11 @@ let tableMemory = null;
 
 function renderTable(rows, host) {
   if (!rows.length) {
-    swapView(host, el("div", { class: "empty", text: emptyMessage() }));
+    // Keep the source dropdown reachable so an empty result can be undone.
+    const tools = state.tab === "relic_win_rate" && $("fSource").value
+      ? [el("div", { class: "table-tools" }, relicSourceSelect())]
+      : [];
+    swapView(host, ...tools, el("div", { class: "empty", text: emptyMessage() }));
     return;
   }
 
@@ -589,6 +593,7 @@ function renderTable(rows, host) {
     draw();
   });
   toolbar.append(searchInput);
+  if (state.tab === "relic_win_rate") toolbar.append(relicSourceSelect());
 
   const headRow = el("tr");
   cols.forEach((col, i) => {
@@ -802,7 +807,22 @@ function syncSourceFilter() {
       el("option", { value: "", text: "All relics" }),
       ...Object.entries(RELIC_SOURCES).map(([value, text]) => el("option", { value, text })),
     );
-  $("sourceFilter").hidden = state.tab !== "relic_win_rate";
+}
+
+// The visible dropdown, shown in the table toolbar on the Relic WR tab. The hidden #fSource keeps the value.
+function relicSourceSelect() {
+  syncSourceFilter();
+  const select = el(
+    "select",
+    { "aria-label": "Relic source", title: "Where the relic came from. Starting relics are never counted." },
+    ...[...$("fSource").options].map((o) => el("option", { value: o.value, text: o.text })),
+  );
+  select.value = $("fSource").value;
+  select.addEventListener("change", () => {
+    $("fSource").value = select.value;
+    $("fSource").dispatchEvent(new Event("change"));
+  });
+  return select;
 }
 
 function renderTabs() {
