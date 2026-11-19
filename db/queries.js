@@ -122,7 +122,8 @@ const TABS = {
         FROM run_relics x
         JOIN runs r ON r.run_id = x.run_id
         WHERE x.relic_id NOT IN (${STARTING_RELIC_LIST}) AND ${BASE}
-          AND (@source IS NULL OR x.source = @source)
+          AND (@source IS NULL OR x.origin = @source
+               OR (@source = 'ANCIENT' AND substr(x.origin, 1, 8) = 'ANCIENT_'))
       )
       GROUP BY relic
       HAVING runs >= @min

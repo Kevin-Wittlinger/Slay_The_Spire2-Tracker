@@ -107,6 +107,13 @@ worked out when the server starts (`lib/areas.js`): acts 2 and 3 are Hive and Gl
 depending on which act-1 enemies the run fought, learned from runs that already have their areas. A run whose enemies
 are unknown is skipped until its folder is imported again (nothing is duplicated).
 
+The **Relic WR** tab has a source dropdown in its table toolbar: Neow, all Ancients or one Ancient (Tezcatara, Tanx,
+Vakuu, Orobas, Darv, Nonupeipe, Pael), shop, elite fights, boss rewards, treasure chests, events, rest sites. It is
+stored per relic in `run_relics.origin` and read from the room type of the floor that gave the relic (`lib/relics.js`).
+Runs imported before it existed are filled in when the server starts, from the fights, events and card offers the
+database kept. That cannot tell a treasure chest from a rest site (and misses some shops with no card offers), so
+those relics show as treasure until the run is imported again, which sets the exact value.
+
 ## Icons
 
 Character logos live in `public/img/characters/` and ascension flames (levels 0-10) in `public/img/ascension/`.

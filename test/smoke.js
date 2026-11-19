@@ -340,63 +340,98 @@ async function main() {
   assert.strictEqual(JSON.parse((await dispatch(areaApi, "/api/stats/overview?area=glory%27%3B--")).body)[0].runs, 2);
   await areaDb.close();
 
-  // Relic source: Neow (act 1 Ancient), Ancients (acts 2 and 3) and everything else.
+  // Relic origin: Neow, each Ancient, shop, elite, boss, treasure, events, rest sites.
   const relicDb = await openDb(":memory:");
   const relicImporter = createImporter(relicDb);
-  const ancientRoom = (model, picked) => ({
+  const ancientRoom = (model) => ({
     map_point_type: "ancient",
     rooms: [{ room_type: "event", model_id: model }],
-    player_stats: [{ relic_choices: [{ choice: picked, was_picked: true }, { choice: "RELIC.NOT_TAKEN", was_picked: false }] }],
+    player_stats: [{}],
   });
-  const plainRoom = (type, model) => ({
-    map_point_type: type,
-    rooms: [{ room_type: type, model_id: model, monster_ids: [] }],
-    player_stats: [{ current_hp: 40, damage_taken: 1 }],
+  const room = (mapType, roomType, model, extra = {}) => ({
+    map_point_type: mapType,
+    rooms: [{ room_type: roomType, model_id: model, monster_ids: [] }],
+    player_stats: [{ current_hp: 40, damage_taken: 1, ...extra }],
   });
-  const relicRun = (seed, win) => ({
-    ...makeRun({ seed, win }),
+  const relicRun = (seed) => ({
+    ...makeRun({ seed, win: true }),
     map_point_history: [
-      [ancientRoom("EVENT.NEOW", "RELIC.FROM_NEOW"), plainRoom("elite", "ENCOUNTER.X")],
-      [ancientRoom("EVENT.TANX", "RELIC.FROM_ANCIENT"), plainRoom("elite", "ENCOUNTER.Y")],
+      [
+        ancientRoom("EVENT.NEOW"), // floor 1
+        room("elite", "elite", "ENCOUNTER.X"), // 2
+        room("shop", "shop", undefined, { card_choices: [{ card: { id: "CARD.SHOP_OFFER" }, was_picked: false }] }), // 3
+      ],
+      [
+        ancientRoom("EVENT.TANX"), // 4
+        room("treasure", "treasure"), // 5
+        room("unknown", "event", "EVENT.SOME_EVENT"), // 6
+        room("rest_site", "rest_site"), // 7
+        room("boss", "boss", "ENCOUNTER.B"), // 8
+      ],
+      [ancientRoom("EVENT.VAKUU")], // 9
     ],
   });
-  const relicRunData = relicRun("R1", true);
+  const relicRunData = relicRun("R1");
   relicRunData.players[0].relics = [
     { id: "RELIC.DIVINE_RIGHT", floor_added_to_deck: 1 }, // starting relic, same floor as Neow
     { id: "RELIC.FROM_NEOW", floor_added_to_deck: 1 },
-    { id: "RELIC.FROM_ANCIENT", floor_added_to_deck: 3 },
-    { id: "RELIC.FROM_ELITE", floor_added_to_deck: 4 },
+    { id: "RELIC.FROM_ELITE", floor_added_to_deck: 2 },
+    { id: "RELIC.FROM_SHOP", floor_added_to_deck: 3 },
+    { id: "RELIC.FROM_TANX", floor_added_to_deck: 4 },
+    { id: "RELIC.FROM_CHEST", floor_added_to_deck: 5 },
+    { id: "RELIC.FROM_EVENT", floor_added_to_deck: 6 },
+    { id: "RELIC.FROM_REST", floor_added_to_deck: 7 },
+    { id: "RELIC.FROM_BOSS", floor_added_to_deck: 8 },
+    { id: "RELIC.FROM_VAKUU", floor_added_to_deck: 9 },
   ];
   await relicDb.execute("INSERT INTO profiles (username, password_salt, password_hash, created_at) VALUES ('r', 's', 'h', 0)");
   await relicImporter.importRun(relicRunData, 1);
-  const sourcesOf = async () =>
-    Object.fromEntries((await relicDb.execute("SELECT relic_id, source FROM run_relics")).rows.map((r) => [r.relic_id, r.source]));
-  const expectedSources = {
-    "RELIC.DIVINE_RIGHT": "OTHER",
+  const originsOf = async () =>
+    Object.fromEntries((await relicDb.execute("SELECT relic_id, origin FROM run_relics")).rows.map((r) => [r.relic_id, r.origin]));
+  const expectedOrigins = {
+    "RELIC.DIVINE_RIGHT": "STARTING",
     "RELIC.FROM_NEOW": "NEOW",
-    "RELIC.FROM_ANCIENT": "ANCIENT",
-    "RELIC.FROM_ELITE": "OTHER",
+    "RELIC.FROM_ELITE": "ELITE",
+    "RELIC.FROM_SHOP": "SHOP",
+    "RELIC.FROM_TANX": "ANCIENT_TANX",
+    "RELIC.FROM_CHEST": "TREASURE",
+    "RELIC.FROM_EVENT": "EVENT",
+    "RELIC.FROM_REST": "REST",
+    "RELIC.FROM_BOSS": "BOSS",
+    "RELIC.FROM_VAKUU": "ANCIENT_VAKUU",
   };
-  assert.deepStrictEqual(await sourcesOf(), expectedSources);
+  assert.deepStrictEqual(await originsOf(), expectedOrigins);
   const relicNames = async (source) =>
-    (await runQuery(relicDb, "relic_win_rate", { source })).map((r) => r.relic).sort();
-  assert.deepStrictEqual(await relicNames(null), ["RELIC.FROM_ANCIENT", "RELIC.FROM_ELITE", "RELIC.FROM_NEOW"]);
-  assert.deepStrictEqual(await relicNames("NEOW"), ["RELIC.FROM_NEOW"]);
-  assert.deepStrictEqual(await relicNames("ANCIENT"), ["RELIC.FROM_ANCIENT"]);
-  assert.deepStrictEqual(await relicNames("OTHER"), ["RELIC.FROM_ELITE"]);
-  // A database from before the column existed is upgraded and its rows worked out from the events table.
+    (await runQuery(relicDb, "relic_win_rate", { source })).map((r) => r.relic.replace("RELIC.FROM_", "")).sort();
+  assert.strictEqual((await relicNames(null)).length, 9); // the starting relic is never listed
+  assert.deepStrictEqual(await relicNames("NEOW"), ["NEOW"]);
+  assert.deepStrictEqual(await relicNames("ANCIENT"), ["TANX", "VAKUU"]); // every act 2 and 3 Ancient
+  assert.deepStrictEqual(await relicNames("ANCIENT_TANX"), ["TANX"]);
+  assert.deepStrictEqual(await relicNames("SHOP"), ["SHOP"]);
+  assert.deepStrictEqual(await relicNames("ELITE"), ["ELITE"]);
+  assert.deepStrictEqual(await relicNames("BOSS"), ["BOSS"]);
+  assert.deepStrictEqual(await relicNames("TREASURE"), ["CHEST"]);
+  assert.deepStrictEqual(await relicNames("EVENT"), ["EVENT"]);
+  // A database from before the column existed is upgraded and its rows worked out from the tables we keep.
+  // Treasure chests and rest sites can't be told apart there, so the rest site shows as TREASURE.
   const { ensureRelicSourceColumn, backfillRelicSources } = require("../lib/relics");
-  await relicDb.execute("DROP INDEX idx_relics_source");
-  await relicDb.execute("ALTER TABLE run_relics DROP COLUMN source");
+  await relicDb.execute("DROP INDEX idx_relics_origin");
+  await relicDb.execute("ALTER TABLE run_relics DROP COLUMN origin");
+  await relicDb.execute("ALTER TABLE run_relics ADD COLUMN source TEXT"); // the first version of the column
   await ensureRelicSourceColumn(relicDb);
+  assert.ok(!(await relicDb.execute("PRAGMA table_info(run_relics)")).rows.some((c) => c.name === "source"));
   assert.ok((await backfillRelicSources(relicDb)) > 0);
-  assert.deepStrictEqual(await sourcesOf(), expectedSources);
+  assert.deepStrictEqual(await originsOf(), { ...expectedOrigins, "RELIC.FROM_REST": "TREASURE" });
   assert.strictEqual(await backfillRelicSources(relicDb), 0);
-  // The API only accepts the three source names.
+  // Importing the run file again sets the exact value.
+  assert.strictEqual((await relicImporter.importRun(relicRunData, 1)).status, "duplicate");
+  assert.deepStrictEqual(await originsOf(), expectedOrigins);
+  // The API takes upper-case names only.
   const relicApi = createHandler(relicDb);
   const apiRelics = async (q) => JSON.parse((await dispatch(relicApi, "/api/stats/relic_win_rate" + q)).body).length;
-  assert.strictEqual(await apiRelics("?source=NEOW"), 1);
-  assert.strictEqual(await apiRelics("?source=bogus"), 3);
+  assert.strictEqual(await apiRelics("?source=ANCIENT_VAKUU"), 1);
+  assert.strictEqual(await apiRelics("?source=ANCIENT"), 2);
+  assert.strictEqual(await apiRelics("?source=bogus"), 9);
   await relicDb.close();
 
   // Caching: shared statistics may be cached briefly, anything tied to the signed-in user never.

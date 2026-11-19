@@ -900,8 +900,32 @@ function refreshStats() {
 }
 
 // ---------- tabs ----------
-// Where a relic came from, as stored in run_relics.source. Only the Relic WR tab uses it.
-const RELIC_SOURCES = { NEOW: "Neow", ANCIENT: "Ancients", OTHER: "Other relics" };
+// Where a relic came from, as stored in run_relics.origin (see lib/relics.js). Only Relic WR uses it.
+// "Ancients" covers every act 2 and 3 Ancient; the individual Ancients are listed under it.
+const ANCIENT_NAMES = ["Tezcatara", "Tanx", "Vakuu", "Orobas", "Darv", "Nonupeipe", "Pael"];
+const RELIC_SOURCE_GROUPS = [
+  [null, { NEOW: "Neow" }],
+  [
+    "Ancients",
+    {
+      ANCIENT: "All Ancients",
+      ...Object.fromEntries(ANCIENT_NAMES.map((name) => [`ANCIENT_${name.toUpperCase()}`, name])),
+    },
+  ],
+  [
+    "Elsewhere",
+    {
+      SHOP: "Shop",
+      ELITE: "Elite fights",
+      BOSS: "Boss rewards",
+      TREASURE: "Treasure chests",
+      EVENT: "Events",
+      REST: "Rest sites",
+      OTHER: "Other",
+    },
+  ],
+];
+const RELIC_SOURCES = Object.assign({}, ...RELIC_SOURCE_GROUPS.map(([, options]) => options));
 
 function syncSourceFilter() {
   const select = $("fSource");
@@ -915,10 +939,16 @@ function syncSourceFilter() {
 // The visible dropdown, shown in the table toolbar on the Relic WR tab. The hidden #fSource keeps the value.
 function relicSourceSelect() {
   syncSourceFilter();
+  const option = ([value, text]) => el("option", { value, text });
   const select = el(
     "select",
     { "aria-label": "Relic source", title: "Where the relic came from. Starting relics are never counted." },
-    ...[...$("fSource").options].map((o) => el("option", { value: o.value, text: o.text })),
+    el("option", { value: "", text: "All relics" }),
+    ...RELIC_SOURCE_GROUPS.flatMap(([label, options]) =>
+      label
+        ? [el("optgroup", { label }, ...Object.entries(options).map(option))]
+        : Object.entries(options).map(option),
+    ),
   );
   select.value = $("fSource").value;
   select.addEventListener("change", () => {
