@@ -532,7 +532,7 @@ function renderTable(rows, host) {
   if (!rows.length) {
     // Keep the source dropdown reachable so an empty result can be undone.
     const tools = state.tab === "relic_win_rate" && $("fSource").value
-      ? [el("div", { class: "table-tools" }, relicSourceSelect())]
+      ? [el("div", { class: "table-tools" }, ...relicSourceSelects())]
       : [];
     swapView(host, ...tools, el("div", { class: "empty", text: emptyMessage() }));
     return;
@@ -667,7 +667,7 @@ function renderTable(rows, host) {
     draw();
   });
   toolbar.append(searchInput);
-  if (state.tab === "relic_win_rate") toolbar.append(relicSourceSelect());
+  if (state.tab === "relic_win_rate") toolbar.append(...relicSourceSelects());
 
   const headRow = el("tr");
   cols.forEach((col, i) => {
@@ -901,20 +901,23 @@ function refreshStats() {
 
 // ---------- tabs ----------
 // Where a relic came from, as stored in run_relics.origin (see lib/relics.js). Only Relic WR uses it.
-// "Ancients" covers every act 2 and 3 Ancient; the individual Ancients are listed under it.
+// Two dropdowns share the one value: Neow and the Ancients, and everywhere else. A relic has a single
+// origin, so picking in one dropdown clears the other. "All Ancients" is every act 2 and 3 Ancient.
 const ANCIENT_NAMES = ["Tezcatara", "Tanx", "Vakuu", "Orobas", "Darv", "Nonupeipe", "Pael"];
-const RELIC_SOURCE_GROUPS = [
-  [null, { NEOW: "Neow" }],
-  [
-    "Ancients",
-    {
+const RELIC_SOURCE_SELECTS = [
+  {
+    label: "Neow and Ancients",
+    anyText: "Neow & Ancients",
+    options: {
+      NEOW: "Neow",
       ANCIENT: "All Ancients",
       ...Object.fromEntries(ANCIENT_NAMES.map((name) => [`ANCIENT_${name.toUpperCase()}`, name])),
     },
-  ],
-  [
-    "Elsewhere",
-    {
+  },
+  {
+    label: "Other relic sources",
+    anyText: "Other sources",
+    options: {
       SHOP: "Shop",
       ELITE: "Elite fights",
       BOSS: "Boss rewards",
@@ -923,9 +926,9 @@ const RELIC_SOURCE_GROUPS = [
       REST: "Rest sites",
       OTHER: "Other",
     },
-  ],
+  },
 ];
-const RELIC_SOURCES = Object.assign({}, ...RELIC_SOURCE_GROUPS.map(([, options]) => options));
+const RELIC_SOURCES = Object.assign({}, ...RELIC_SOURCE_SELECTS.map((group) => group.options));
 
 function syncSourceFilter() {
   const select = $("fSource");
@@ -936,26 +939,27 @@ function syncSourceFilter() {
     );
 }
 
-// The visible dropdown, shown in the table toolbar on the Relic WR tab. The hidden #fSource keeps the value.
-function relicSourceSelect() {
+// The two visible dropdowns, shown in the table toolbar on the Relic WR tab. The hidden #fSource keeps the value.
+function relicSourceSelects() {
   syncSourceFilter();
-  const option = ([value, text]) => el("option", { value, text });
-  const select = el(
-    "select",
-    { "aria-label": "Relic source", title: "Where the relic came from. Starting relics are never counted." },
-    el("option", { value: "", text: "All relics" }),
-    ...RELIC_SOURCE_GROUPS.flatMap(([label, options]) =>
-      label
-        ? [el("optgroup", { label }, ...Object.entries(options).map(option))]
-        : Object.entries(options).map(option),
-    ),
-  );
-  select.value = $("fSource").value;
-  select.addEventListener("change", () => {
-    $("fSource").value = select.value;
-    $("fSource").dispatchEvent(new Event("change"));
+  const selects = RELIC_SOURCE_SELECTS.map(({ label, anyText, options }) => {
+    const select = el(
+      "select",
+      { "aria-label": label, title: "Where the relic came from. Starting relics are never counted." },
+      el("option", { value: "", text: anyText }),
+      ...Object.entries(options).map(([value, text]) => el("option", { value, text })),
+    );
+    select.value = Object.hasOwn(options, $("fSource").value) ? $("fSource").value : "";
+    return select;
   });
-  return select;
+  selects.forEach((select) =>
+    select.addEventListener("change", () => {
+      for (const other of selects) if (other !== select) other.value = "";
+      $("fSource").value = select.value;
+      $("fSource").dispatchEvent(new Event("change"));
+    }),
+  );
+  return selects;
 }
 
 function renderTabs() {
