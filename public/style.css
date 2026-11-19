@@ -602,6 +602,10 @@ button.user-link:hover {
   max-width: none;
   object-fit: contain; /* monster art comes in all shapes */
 }
+.cell-icon.card-thumb {
+  width: 34px;
+  height: 42px; /* cards are taller than wide */
+}
 .fight-type {
   display: inline-flex;
   align-items: center;

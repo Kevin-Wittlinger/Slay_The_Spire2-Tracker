@@ -42,7 +42,7 @@ const ALPHABETICAL_TABS = {
 // (Character is left out: the logo row at the top already filters every tab.)
 // Only columns with a handful of values get a dropdown. Name columns (card, relic, enemy, event...)
 // are left to the search box, where a dropdown with hundreds of entries would just repeat it.
-const FILTERABLE = new Set(["ascension", "type", "result", "source"]);
+const FILTERABLE = new Set(["ascension", "type", "result", "source", "rarity"]);
 
 // Logo banners in public/img/characters, as [width, height] in CSS pixels.
 // The images are trimmed and scaled so the lettering is the same size in every logo;
@@ -195,9 +195,15 @@ function encounterCell(value, col) {
   return match ? iconCell(`img/monsters/${match[1].toLowerCase()}.png`, value, col) : null;
 }
 
+// Card picture + name, from the wiki card list: CARD.BASH -> img/cards/bash.png.
+function cardCell(value) {
+  const match = typeof value === "string" && value.match(/^CARD\.([A-Z0-9_]+)$/);
+  return match ? iconCell(`img/cards/${match[1].toLowerCase()}.png`, value, "card", "cell-icon card-thumb") : null;
+}
+
 // Small picture before the cell text; a missing picture just leaves the text.
-function iconCell(src, value, col) {
-  const img = el("img", { class: "cell-icon", src, alt: "", width: 32, height: 32, loading: "lazy" });
+function iconCell(src, value, col, cls = "cell-icon") {
+  const img = el("img", { class: cls, src, alt: "", width: 32, height: 32, loading: "lazy" });
   img.addEventListener("error", () => img.remove(), { once: true });
   return el("span", { class: "icon-cell" }, img, el("span", { text: formatCell(value, col) }));
 }
@@ -474,6 +480,10 @@ function swapView(host, ...nodes) {
 // rows without wiping their search. Stored by column name; switching tabs clears it.
 let tableMemory = null;
 
+// Rarity sorts in game order (Basic, Common, Uncommon, Rare, ...) instead of A-Z.
+const compareFor = (col) =>
+  col === "rarity" ? (a, b) => rarityRank(a) - rarityRank(b) : compareValues;
+
 function renderTable(rows, host) {
   if (!rows.length) {
     // Keep the source dropdown reachable so an empty result can be undone.
@@ -529,9 +539,8 @@ function renderTable(rows, host) {
           row.some((v) => formatCell(v, "").toLowerCase().includes(needle))),
     );
     if (sortCol >= 0) {
-      visible.sort(
-        (a, b) => compareValues(a[sortCol], b[sortCol]) * (ascending ? 1 : -1),
-      );
+      const compare = compareFor(cols[sortCol]);
+      visible.sort((a, b) => compare(a[sortCol], b[sortCol]) * (ascending ? 1 : -1));
     } else if (defaultCol >= 0) {
       visible.sort((a, b) => compareValues(a[defaultCol], b[defaultCol]));
     }
@@ -581,6 +590,8 @@ function renderTable(rows, host) {
                   ? fightTypeCell(value)
                   : col === "relic"
                     ? relicCell(value)
+                    : col === "card"
+                      ? cardCell(value)
                     : col === "encounter" || col === "killed_by"
                       ? encounterCell(value, col)
                       : null;
@@ -648,9 +659,7 @@ function renderTable(rows, host) {
         : null;
     const values =
       fixed ||
-      [...new Set(data.map((row) => row[i]).filter((v) => v != null))].sort(
-        compareValues,
-      );
+      [...new Set(data.map((row) => row[i]).filter((v) => v != null))].sort(compareFor(col));
     if (!fixed && values.length < 2) return;
     const select = el(
       "select",
@@ -705,6 +714,33 @@ async function renderOverview(loadId) {
   );
 }
 
+// Card rarity is fixed game data (from the wiki card list), so it lives in a static file and is
+// added to card tables here as a "Rarity" column right after the card name.
+const RARITY_ORDER = ["Basic", "Common", "Uncommon", "Rare", "Ancient", "Event", "Status", "Curse", "Quest", "Token"];
+const rarityRank = (value) => {
+  const i = RARITY_ORDER.indexOf(value);
+  return i < 0 ? RARITY_ORDER.length : i;
+};
+let cardRarity = null;
+function loadCardRarity() {
+  cardRarity ||= fetch("card-rarity.json?v=1")
+    .then((res) => (res.ok ? res.json() : {}))
+    .catch(() => ({}));
+  return cardRarity;
+}
+async function withRarity(rows) {
+  if (!rows.length || !("card" in rows[0])) return rows;
+  const rarity = await loadCardRarity();
+  return rows.map((row) => {
+    const out = {};
+    for (const [key, value] of Object.entries(row)) {
+      out[key] = value;
+      if (key === "card") out.rarity = rarity[value] ?? null;
+    }
+    return out;
+  });
+}
+
 async function renderView(loadId) {
   const host = $("view");
   host.setAttribute("aria-busy", "true");
@@ -719,9 +755,10 @@ async function renderView(loadId) {
         ? api(`/api/stats/${state.tab}?${statsQuery({ allCharacters: true })}`)
         : null,
     ]);
+    const shown = tab?.kind === "trends" ? rows : await withRarity(rows);
     if (loadId !== state.loadId) return;
     if (tab?.kind === "trends") renderTrends(rows, host, { character, allRows });
-    else renderTable(rows, host);
+    else renderTable(shown, host);
   } catch (error) {
     if (loadId !== state.loadId) return;
     swapView(host, el("div", { class: "err", text: error.message }));
