@@ -192,7 +192,11 @@ function relicCell(value) {
 // encounter without its strength suffix: ENCOUNTER.NIBBITS_WEAK -> img/monsters/nibbits.png.
 function encounterCell(value, col) {
   const match = typeof value === "string" && value.match(/^ENCOUNTER\.([A-Z0-9_]+?)(?:_(?:NORMAL|WEAK|ELITE|BOSS))?$/);
-  return match ? iconCell(`img/monsters/${match[1].toLowerCase()}.png`, value, col) : null;
+  if (!match) return null;
+  const cell = iconCell(`img/monsters/${match[1].toLowerCase()}.png`, value, col);
+  if (/_WEAK$/.test(value)) cell.title = "Weak: easier pool of regular fights, early in an act";
+  else if (/_NORMAL$/.test(value)) cell.title = "Normal: harder pool of regular fights, later in an act";
+  return cell;
 }
 
 // Card picture + name, from the wiki card list: CARD.BASH -> img/cards/bash.png.
@@ -737,6 +741,9 @@ function renderTable(rows, host) {
       { class: "table-wrap" },
       el("table", {}, el("thead", {}, headRow), tbody),
     ),
+    cols.some((c) => c === "encounter" || c === "killed_by")
+      ? el("p", { class: "hint", text: "Weak = the easier pool of regular fights, met early in an act. Normal = the harder pool, met later." })
+      : null,
   );
 }
 
