@@ -42,7 +42,7 @@ const ALPHABETICAL_TABS = {
 // (Character is left out: the logo row at the top already filters every tab.)
 // Only columns with a handful of values get a dropdown. Name columns (card, relic, enemy, event...)
 // are left to the search box, where a dropdown with hundreds of entries would just repeat it.
-const FILTERABLE = new Set(["ascension", "type", "result", "source", "rarity"]);
+const FILTERABLE = new Set(["ascension", "type", "result", "source", "rarity", "color"]);
 
 // Logo banners in public/img/characters, as [width, height] in CSS pixels.
 // The images are trimmed and scaled so the lettering is the same size in every logo;
@@ -758,28 +758,31 @@ async function renderOverview(loadId) {
   );
 }
 
-// Card rarity is fixed game data (from the wiki card list), so it lives in a static file and is
-// added to card tables here as a "Rarity" column right after the card name.
+// Card rarity and colour (Ironclad, Silent, ..., Colorless) are fixed game data from the wiki card
+// list, kept in a static file and added to card tables as "Color" and "Rarity" columns after the name.
 const RARITY_ORDER = ["Basic", "Common", "Uncommon", "Rare", "Ancient", "Event", "Status", "Curse", "Quest", "Token"];
 const rarityRank = (value) => {
   const i = RARITY_ORDER.indexOf(value);
   return i < 0 ? RARITY_ORDER.length : i;
 };
-let cardRarity = null;
-function loadCardRarity() {
-  cardRarity ||= fetch("card-rarity.json?v=1")
+let cardInfo = null;
+function loadCardInfo() {
+  cardInfo ||= fetch("card-info.json?v=1")
     .then((res) => (res.ok ? res.json() : {}))
     .catch(() => ({}));
-  return cardRarity;
+  return cardInfo;
 }
-async function withRarity(rows) {
+async function withCardInfo(rows) {
   if (!rows.length || !("card" in rows[0])) return rows;
-  const rarity = await loadCardRarity();
+  const info = await loadCardInfo();
   return rows.map((row) => {
     const out = {};
     for (const [key, value] of Object.entries(row)) {
       out[key] = value;
-      if (key === "card") out.rarity = rarity[value] ?? null;
+      if (key === "card") {
+        out.color = info[value]?.[1] ?? null;
+        out.rarity = info[value]?.[0] ?? null;
+      }
     }
     return out;
   });
@@ -799,7 +802,7 @@ async function renderView(loadId) {
         ? api(`/api/stats/${state.tab}?${statsQuery({ allCharacters: true })}`)
         : null,
     ]);
-    const shown = tab?.kind === "trends" ? rows : await withRarity(rows);
+    const shown = tab?.kind === "trends" ? rows : await withCardInfo(rows);
     if (loadId !== state.loadId) return;
     if (tab?.kind === "trends") renderTrends(rows, host, { character, allRows });
     else renderTable(shown, host);
