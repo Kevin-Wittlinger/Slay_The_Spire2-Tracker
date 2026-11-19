@@ -901,34 +901,14 @@ function refreshStats() {
 
 // ---------- tabs ----------
 // Where a relic came from, as stored in run_relics.origin (see lib/relics.js). Only Relic WR uses it.
-// Two dropdowns share the one value: Neow and the Ancients, and everywhere else. A relic has a single
-// origin, so picking in one dropdown clears the other. "All Ancients" is every act 2 and 3 Ancient.
+// "All Ancients" is every act 2 and 3 Ancient; Neow is the act 1 one. (The server also understands
+// SHOP, ELITE, BOSS, TREASURE, EVENT, REST and OTHER; they just have no dropdown.)
 const ANCIENT_NAMES = ["Tezcatara", "Tanx", "Vakuu", "Orobas", "Darv", "Nonupeipe", "Pael"];
-const RELIC_SOURCE_SELECTS = [
-  {
-    label: "Neow and Ancients",
-    anyText: "Neow & Ancients",
-    options: {
-      NEOW: "Neow",
-      ANCIENT: "All Ancients",
-      ...Object.fromEntries(ANCIENT_NAMES.map((name) => [`ANCIENT_${name.toUpperCase()}`, name])),
-    },
-  },
-  {
-    label: "Other relic sources",
-    anyText: "Other sources",
-    options: {
-      SHOP: "Shop",
-      ELITE: "Elite fights",
-      BOSS: "Boss rewards",
-      TREASURE: "Treasure chests",
-      EVENT: "Events",
-      REST: "Rest sites",
-      OTHER: "Other",
-    },
-  },
-];
-const RELIC_SOURCES = Object.assign({}, ...RELIC_SOURCE_SELECTS.map((group) => group.options));
+const RELIC_SOURCES = {
+  NEOW: "Neow",
+  ANCIENT: "All Ancients",
+  ...Object.fromEntries(ANCIENT_NAMES.map((name) => [`ANCIENT_${name.toUpperCase()}`, name])),
+};
 
 function syncSourceFilter() {
   const select = $("fSource");
@@ -939,27 +919,21 @@ function syncSourceFilter() {
     );
 }
 
-// The two visible dropdowns, shown in the table toolbar on the Relic WR tab. The hidden #fSource keeps the value.
+// The visible dropdown, shown in the table toolbar on the Relic WR tab. The hidden #fSource keeps the value.
 function relicSourceSelects() {
   syncSourceFilter();
-  const selects = RELIC_SOURCE_SELECTS.map(({ label, anyText, options }) => {
-    const select = el(
-      "select",
-      { "aria-label": label, title: "Where the relic came from. Starting relics are never counted." },
-      el("option", { value: "", text: anyText }),
-      ...Object.entries(options).map(([value, text]) => el("option", { value, text })),
-    );
-    select.value = Object.hasOwn(options, $("fSource").value) ? $("fSource").value : "";
-    return select;
-  });
-  selects.forEach((select) =>
-    select.addEventListener("change", () => {
-      for (const other of selects) if (other !== select) other.value = "";
-      $("fSource").value = select.value;
-      $("fSource").dispatchEvent(new Event("change"));
-    }),
+  const select = el(
+    "select",
+    { "aria-label": "Relic source", title: "Neow or an Ancient. Starting relics are never counted." },
+    el("option", { value: "", text: "All relics" }),
+    ...Object.entries(RELIC_SOURCES).map(([value, text]) => el("option", { value, text })),
   );
-  return selects;
+  select.value = $("fSource").value;
+  select.addEventListener("change", () => {
+    $("fSource").value = select.value;
+    $("fSource").dispatchEvent(new Event("change"));
+  });
+  return [select];
 }
 
 function renderTabs() {
