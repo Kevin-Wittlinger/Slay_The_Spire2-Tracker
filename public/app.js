@@ -185,17 +185,21 @@ function characterLogo(value, scale = 1) {
 // (RELIC.BURNING_BLOOD -> burning_blood.png). A relic without an icon just shows its name.
 function relicCell(value) {
   const match = typeof value === "string" && value.match(/^RELIC\.([A-Z0-9_]+)$/);
-  if (!match) return null;
-  const img = el("img", {
-    class: "relic-icon",
-    src: `img/relics/${match[1].toLowerCase()}.png`,
-    alt: "",
-    width: 32,
-    height: 32,
-    loading: "lazy",
-  });
+  return match ? iconCell(`img/relics/${match[1].toLowerCase()}.png`, value, "relic") : null;
+}
+
+// Enemy picture + name. Pictures come from the area pages of the Slay the Spire wiki, saved per
+// encounter without its strength suffix: ENCOUNTER.NIBBITS_WEAK -> img/monsters/nibbits.png.
+function encounterCell(value, col) {
+  const match = typeof value === "string" && value.match(/^ENCOUNTER\.([A-Z0-9_]+?)(?:_(?:NORMAL|WEAK|ELITE|BOSS))?$/);
+  return match ? iconCell(`img/monsters/${match[1].toLowerCase()}.png`, value, col) : null;
+}
+
+// Small picture before the cell text; a missing picture just leaves the text.
+function iconCell(src, value, col) {
+  const img = el("img", { class: "cell-icon", src, alt: "", width: 32, height: 32, loading: "lazy" });
   img.addEventListener("error", () => img.remove(), { once: true });
-  return el("span", { class: "relic-cell" }, img, el("span", { text: formatCell(value, "relic") }));
+  return el("span", { class: "icon-cell" }, img, el("span", { text: formatCell(value, col) }));
 }
 
 function fightTypeCell(value) {
@@ -573,7 +577,13 @@ function renderTable(rows, host) {
                     ? ascensionIcon(value)
                     : null;
               const typeCell =
-                col === "type" ? fightTypeCell(value) : col === "relic" ? relicCell(value) : null;
+                col === "type"
+                  ? fightTypeCell(value)
+                  : col === "relic"
+                    ? relicCell(value)
+                    : col === "encounter" || col === "killed_by"
+                      ? encounterCell(value, col)
+                      : null;
               if (logo) td.append(logo);
               else if (typeCell) td.append(typeCell);
               else td.textContent = formatCell(value, col);

@@ -589,17 +589,18 @@ button.user-link:hover {
   display: block;
   max-width: none;
 }
-.relic-cell {
+.icon-cell {
   display: inline-flex;
   align-items: center;
   gap: 8px;
 }
-.relic-icon {
+.cell-icon {
   display: block;
   flex: none;
   width: 32px;
   height: 32px;
   max-width: none;
+  object-fit: contain; /* monster art comes in all shapes */
 }
 .fight-type {
   display: inline-flex;
