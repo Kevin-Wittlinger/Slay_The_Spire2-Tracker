@@ -602,6 +602,24 @@ button.user-link:hover {
   max-width: none;
   object-fit: contain; /* monster art comes in all shapes */
 }
+.card-preview {
+  position: fixed;
+  z-index: 50;
+  width: 240px;
+  pointer-events: none; /* never steals the hover from the row underneath */
+  filter: drop-shadow(0 8px 24px rgba(0, 0, 0, 0.6));
+}
+.card-preview[hidden] {
+  display: none;
+}
+.card-preview img {
+  display: block;
+  width: 240px;
+  height: auto;
+}
+.icon-cell:has(.card-thumb) {
+  cursor: zoom-in;
+}
 .cell-icon.card-thumb {
   width: 34px;
   height: 42px; /* cards are taller than wide */

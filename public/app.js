@@ -201,6 +201,50 @@ function cardCell(value) {
   return match ? iconCell(`img/cards/${match[1].toLowerCase()}.png`, value, "card", "cell-icon card-thumb") : null;
 }
 
+// Hovering a card (picture or name) in a table shows it full size beside the pointer so its text can
+// be read. Large pictures are img/cards-large/<id>.webp, the small ones' bigger siblings.
+function setupCardPreview() {
+  const preview = el("div", { class: "card-preview", hidden: "" }, el("img", { alt: "", width: 240 }));
+  document.body.append(preview);
+  const big = preview.firstChild;
+  let current = null;
+
+  const place = (cell) => {
+    const rect = cell.getBoundingClientRect();
+    const w = preview.offsetWidth || 240;
+    const h = preview.offsetHeight || 300;
+    // Right of the card's name if it fits, else left of its picture; never off the window edges.
+    let left = rect.right + 16;
+    if (left + w > window.innerWidth - 8) left = Math.max(8, rect.left - w - 8);
+    const top = Math.min(Math.max(8, rect.top + rect.height / 2 - h / 2), window.innerHeight - h - 8);
+    preview.style.setProperty("left", `${left}px`);
+    preview.style.setProperty("top", `${top}px`);
+  };
+  const hide = () => {
+    current = null;
+    preview.hidden = true;
+  };
+  const cardCellOf = (node) => {
+    const cell = node instanceof Element ? node.closest(".icon-cell") : null;
+    return cell?.querySelector(".card-thumb") ? cell : null;
+  };
+
+  document.addEventListener("mouseover", (event) => {
+    const cell = cardCellOf(event.target);
+    if (!cell) return hide();
+    if (cell === current) return;
+    current = cell;
+    const small = cell.querySelector(".card-thumb").getAttribute("src");
+    big.onload = () => current === cell && ((preview.hidden = false), place(cell));
+    big.onerror = hide;
+    big.src = small.replace("img/cards/", "img/cards-large/").replace(/\.png$/, ".webp");
+    if (big.complete && big.naturalWidth) big.onload();
+  });
+  document.addEventListener("mouseleave", hide);
+  window.addEventListener("scroll", hide, { passive: true });
+  window.addEventListener("blur", hide);
+}
+
 // Small picture before the cell text; a missing picture just leaves the text.
 function iconCell(src, value, col, cls = "cell-icon") {
   const img = el("img", { class: cls, src, alt: "", width: 32, height: 32, loading: "lazy" });
@@ -1161,6 +1205,7 @@ function wireEvents() {
   $("accountForm").addEventListener("submit", submitAccount);
   $("signOutButton").addEventListener("click", signOut);
 
+  setupCardPreview();
   const onFilter = () => refreshStats();
   $("fAsc").addEventListener("change", onFilter);
   $("fPatch").addEventListener("change", onFilter);
