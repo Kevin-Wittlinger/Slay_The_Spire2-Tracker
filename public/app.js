@@ -40,18 +40,9 @@ const ALPHABETICAL_TABS = {
 
 // Columns that get a dropdown filter above the table.
 // (Character is left out: the logo row at the top already filters every tab.)
-const FILTERABLE = new Set([
-  "ascension",
-  "card",
-  "relic",
-  "type",
-  "encounter",
-  "killed_by",
-  "result",
-  "source",
-  "event",
-  "choice",
-]);
+// Only columns with a handful of values get a dropdown. Name columns (card, relic, enemy, event...)
+// are left to the search box, where a dropdown with hundreds of entries would just repeat it.
+const FILTERABLE = new Set(["ascension", "type", "result", "source"]);
 
 // Logo banners in public/img/characters, as [width, height] in CSS pixels.
 // The images are trimmed and scaled so the lettering is the same size in every logo;
