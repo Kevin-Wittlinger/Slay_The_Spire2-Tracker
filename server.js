@@ -14,7 +14,18 @@ const MIME = {
   ".svg": "image/svg+xml",
   ".jpg": "image/jpeg",
   ".png": "image/png",
+  ".gif": "image/gif",
+  ".webp": "image/webp",
+  ".json": "application/json",
+  ".ico": "image/x-icon",
 };
+
+// Images and card data rarely change, so browsers keep them for a week instead of asking again on
+// every page view (a table can show hundreds of icons). Same rule as vercel.json. Everything else,
+// including the versioned app.js and style.css, is checked on each load.
+const LONG_CACHE = "public, max-age=604800, stale-while-revalidate=86400";
+const cacheControl = (rel) =>
+  rel.startsWith("img/") || rel === "card-info.json" ? LONG_CACHE : "no-cache";
 
 const SECURITY_HEADERS = {
   "X-Content-Type-Options": "nosniff",
@@ -35,17 +46,16 @@ async function start() {
         ? "index.html"
         : decodeURIComponent(url.pathname.slice(1));
     const file = path.resolve(PUBLIC, rel);
-    if (
-      !file.startsWith(`${PUBLIC}${path.sep}`) ||
-      !fs.existsSync(file) ||
-      fs.statSync(file).isDirectory()
-    ) {
+    const stat = file.startsWith(`${PUBLIC}${path.sep}`)
+      ? await fs.promises.stat(file).catch(() => null)
+      : null;
+    if (!stat || stat.isDirectory()) {
       res.writeHead(404, { ...SECURITY_HEADERS, "Content-Type": "text/plain" });
       return res.end("Not found");
     }
     res.writeHead(200, {
       ...SECURITY_HEADERS,
-      "Cache-Control": "no-cache",
+      "Cache-Control": cacheControl(rel.replace(/\\/g, "/")),
       "Content-Type": MIME[path.extname(file)] || "application/octet-stream",
     });
     fs.createReadStream(file).pipe(res);

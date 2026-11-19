@@ -60,7 +60,6 @@ const CHARACTER_LOGOS = {
 // drawn at [width, height] CSS pixels. Other levels fall back to plain text.
 const ASCENSION_MAX = 10;
 const ASCENSION_SIZE = [23, 34];
-const ASCENSION_COLUMNS = new Set(["ascension", "max_ascension"]);
 
 // Fight-type icons (public/img/fights/<kind>.png) shown beside the text in "type" columns.
 // Fights are stored as monster / elite / boss; Killed by spells them "Regular combat" / "Elite" / "Boss".
@@ -368,6 +367,33 @@ function debounce(fn, ms) {
   };
 }
 
+// ---------- filters ----------
+// Every filter: its name in the URL and the API, and the input that holds it. The URL hash, the
+// stats requests, the empty-table message and Reset all read this one list.
+const FILTER_INPUTS = {
+  character: "fChar",
+  ascension: "fAsc",
+  patch: "fPatch",
+  area: "fArea",
+  source: "fSource", // relic source, only used on Relic WR
+  min: "fMin",
+};
+
+// The filters that apply right now, empty ones left out.
+// allCharacters: leave the character out (the Trends play-rate chart always compares them).
+function activeFilters({ allCharacters = false } = {}) {
+  const active = {};
+  for (const [name, id] of Object.entries(FILTER_INPUTS)) {
+    const value = $(id).value;
+    if (!value) continue;
+    if (name === "character" && allCharacters) continue;
+    if (name === "source" && state.tab !== "relic_win_rate") continue;
+    if (name === "min" && !(Number(value) > 1)) continue;
+    active[name] = value;
+  }
+  return active;
+}
+
 // ---------- URL hash (shareable, survives reload) ----------
 function viewToken() {
   const { scope, profile } = state.view;
@@ -378,15 +404,7 @@ function viewToken() {
 }
 
 function writeHash() {
-  const params = new URLSearchParams();
-  params.set("tab", state.tab);
-  params.set("view", viewToken());
-  if ($("fChar").value) params.set("character", $("fChar").value);
-  if ($("fAsc").value) params.set("ascension", $("fAsc").value);
-  if ($("fPatch").value) params.set("patch", $("fPatch").value);
-  if ($("fArea").value) params.set("area", $("fArea").value);
-  if ($("fSource").value && state.tab === "relic_win_rate") params.set("source", $("fSource").value);
-  if (Number($("fMin").value) > 1) params.set("min", $("fMin").value);
+  const params = new URLSearchParams({ tab: state.tab, view: viewToken(), ...activeFilters() });
   if (trendsState.mode === "split") params.set("trend", "split");
   history.replaceState(null, "", `#${params}`);
 }
@@ -406,7 +424,7 @@ function readHash() {
   } else if (view === "me") {
     initial.view = { scope: "me" };
   }
-  for (const key of ["character", "ascension", "patch", "area", "source", "min"]) {
+  for (const key of Object.keys(FILTER_INPUTS)) {
     if (params.get(key)) initial.filters[key] = params.get(key);
   }
   return initial;
@@ -422,16 +440,8 @@ function scopeParams(params = new URLSearchParams()) {
   return params;
 }
 
-// allCharacters: leave the character filter out (the Trends play-rate chart always compares them).
-function statsQuery({ allCharacters = false } = {}) {
-  const params = new URLSearchParams();
-  if ($("fChar").value && !allCharacters) params.set("character", $("fChar").value);
-  if ($("fAsc").value) params.set("ascension", $("fAsc").value);
-  if ($("fPatch").value) params.set("patch", $("fPatch").value);
-  if ($("fArea").value) params.set("area", $("fArea").value);
-  if ($("fSource").value && state.tab === "relic_win_rate") params.set("source", $("fSource").value);
-  params.set("min", Math.max(1, Number($("fMin").value) || 1));
-  return scopeParams(params).toString();
+function statsQuery(options) {
+  return scopeParams(new URLSearchParams(activeFilters(options))).toString();
 }
 
 function viewLabel() {
@@ -443,18 +453,26 @@ function viewLabel() {
 }
 
 // ---------- table ----------
-// Compares by the name shown on screen ("Black Hole"), not the raw id ("CARD.BLACK_HOLE").
 const collator = new Intl.Collator(undefined, {
   numeric: true,
   sensitivity: "base",
 });
 
-function compareValues(a, b) {
+// What a cell sorts by, worked out once per cell: names by what is shown on screen ("Black Hole",
+// not "CARD.BLACK_HOLE"), rarity in game order (Basic, Common, Uncommon, Rare, ...), numbers as numbers.
+function sortKey(value, col) {
+  if (value === null || value === undefined) return null;
+  if (col === "rarity") return rarityRank(value);
+  return typeof value === "number" ? value : pretty(String(value));
+}
+
+// Empty cells go last (in the default direction).
+function compareKeys(a, b) {
   if (a === b) return 0;
-  if (a === null || a === undefined) return 1;
-  if (b === null || b === undefined) return -1;
+  if (a === null) return 1;
+  if (b === null) return -1;
   if (typeof a === "number" && typeof b === "number") return a - b;
-  return collator.compare(String(pretty(a)), String(pretty(b)));
+  return collator.compare(String(a), String(b));
 }
 
 // "3:alice,7:bob" -> [{id: 3, username: "alice"}, ...], sorted by name.
@@ -493,14 +511,7 @@ function appendPlayers(row, td) {
 }
 
 function emptyMessage() {
-  const filtered =
-    $("fChar").value ||
-    $("fAsc").value ||
-    $("fPatch").value ||
-    $("fArea").value ||
-    (state.tab === "relic_win_rate" && $("fSource").value) ||
-    Number($("fMin").value) > 1;
-  if (filtered)
+  if (Object.keys(activeFilters()).length)
     return "Nothing matches these filters. Try lowering the minimum sample or resetting the filters.";
   if (state.view.scope === "global")
     return "No runs have been imported yet. Create a profile and import your .run folder to get started.";
@@ -528,32 +539,76 @@ function swapView(host, ...nodes) {
 // rows without wiping their search. Stored by column name; switching tabs clears it.
 let tableMemory = null;
 
-// Rarity sorts in game order (Basic, Common, Uncommon, Rare, ...) instead of A-Z.
-const compareFor = (col) =>
-  col === "rarity" ? (a, b) => rarityRank(a) - rarityRank(b) : compareValues;
+// Pictures in place of (or beside) plain text, by column. Each returns null when it has no picture
+// for the value, and the cell then shows text.
+const CELL_RENDERERS = {
+  character: (value) => characterLogo(value),
+  ascension: ascensionIcon,
+  max_ascension: ascensionIcon,
+  type: fightTypeCell,
+  relic: relicCell,
+  card: cardCell,
+  encounter: encounterCell,
+  killed_by: encounterCell,
+};
+
+const ENEMY_NOTE =
+  "Weak = the easier pool of regular fights, met early in an act. Normal = the harder pool, met later.";
+
+function buildCell(row, col, value) {
+  const td = el("td");
+  if (col === "player") {
+    appendPlayers(row, td);
+    return td;
+  }
+  if (typeof value === "number") td.className = "num";
+  if (col === "character") td.className = "char-cell";
+  if (col === "result" && (value === "WIN" || value === "LOSS"))
+    td.className = value === "WIN" ? "result-win" : "result-loss";
+
+  if (/pct$/.test(col) && typeof value === "number") {
+    const good = value >= 50;
+    const bar = el("span", { class: `bar ${good ? "good" : "bad"}` });
+    bar.style.setProperty("--w", `${Math.min(100, value)}%`);
+    td.append(el("span", { class: `pct ${good ? "good" : "bad"}`, text: formatCell(value, col) }), bar);
+    return td;
+  }
+  const picture = CELL_RENDERERS[col]?.(value, col);
+  if (picture) td.append(picture);
+  else td.textContent = formatCell(value, col);
+  return td;
+}
 
 function renderTable(rows, host) {
   if (!rows.length) {
     // Keep the source dropdown reachable so an empty result can be undone.
     const tools = state.tab === "relic_win_rate" && $("fSource").value
-      ? [el("div", { class: "table-tools" }, ...relicSourceSelects())]
+      ? [el("div", { class: "table-tools" }, relicSourceSelect())]
       : [];
     swapView(host, ...tools, el("div", { class: "empty", text: emptyMessage() }));
     return;
   }
 
   const cols = Object.keys(rows[0]);
-  const playerCol = cols.indexOf("player");
-  const data = rows.map((row) => {
-    const cells = cols.map((col) => row[col]);
-    if (playerCol >= 0) {
+  // Everything a redraw needs is worked out once per row: the values, what each sorts by, the
+  // lowercase text the search box matches, and (on first display) the <tr> itself. Searching and
+  // sorting then only filter and reorder rows that already exist.
+  const data = rows.map((source) => {
+    const row = { cells: cols.map((col) => source[col]), tr: null };
+    if ("player" in source) {
       // Keep the clickable list on the row; the cell value becomes plain names
       // so sorting and searching work on what people see.
-      cells.players = parsePlayers(cells[playerCol]);
-      cells[playerCol] = cells.players.map((p) => p.username).join(", ");
+      const i = cols.indexOf("player");
+      row.players = parsePlayers(row.cells[i]);
+      row.cells[i] = row.players.map((p) => p.username).join(", ");
     }
-    return cells;
+    row.keys = row.cells.map((value, i) => sortKey(value, cols[i]));
+    row.text = row.cells.map((value) => formatCell(value, "").toLowerCase()).join("\n");
+    return row;
   });
+  const rowElement = (row) =>
+    (row.tr ||= el("tr", {}, ...row.cells.map((value, i) => buildCell(row, cols[i], value))));
+
   if (!tableMemory || tableMemory.tab !== state.tab)
     tableMemory = { tab: state.tab, search: "", selected: new Map(), sortCol: null, ascending: false };
   const selected = new Map(); // column index -> chosen value
@@ -582,76 +637,19 @@ function renderTable(rows, host) {
     const needle = search.trim().toLowerCase();
     const visible = data.filter(
       (row) =>
-        [...selected].every(([i, value]) => String(row[i]) === value) &&
-        (!needle ||
-          row.some((v) => formatCell(v, "").toLowerCase().includes(needle))),
+        [...selected].every(([i, value]) => String(row.cells[i]) === value) &&
+        (!needle || row.text.includes(needle)),
     );
     if (sortCol >= 0) {
-      const compare = compareFor(cols[sortCol]);
-      visible.sort((a, b) => compare(a[sortCol], b[sortCol]) * (ascending ? 1 : -1));
+      const direction = ascending ? 1 : -1;
+      visible.sort((a, b) => compareKeys(a.keys[sortCol], b.keys[sortCol]) * direction);
     } else if (defaultCol >= 0) {
-      visible.sort((a, b) => compareValues(a[defaultCol], b[defaultCol]));
+      visible.sort((a, b) => compareKeys(a.keys[defaultCol], b.keys[defaultCol]));
     }
     headerCells.forEach((th, i) => {
-      th.setAttribute(
-        "aria-sort",
-        i === sortCol ? (ascending ? "ascending" : "descending") : "none",
-      );
+      th.setAttribute("aria-sort", i === sortCol ? (ascending ? "ascending" : "descending") : "none");
     });
-    tbody.replaceChildren(
-      ...visible.map((row) =>
-        el(
-          "tr",
-          {},
-          ...row.map((value, i) => {
-            const col = cols[i];
-            const td = el("td");
-            const isPct = /pct$/.test(col) && typeof value === "number";
-            if (typeof value === "number") td.className = "num";
-            if (col === "player") {
-              appendPlayers(row, td);
-              return td;
-            }
-            if (col === "character") td.className = "char-cell";
-            if (col === "result" && (value === "WIN" || value === "LOSS"))
-              td.className = value === "WIN" ? "result-win" : "result-loss";
-            if (isPct) {
-              const good = value >= 50;
-              const bar = el("span", { class: `bar ${good ? "good" : "bad"}` });
-              bar.style.setProperty("--w", `${Math.min(100, value)}%`);
-              td.append(
-                el("span", {
-                  class: good ? "pct good" : "pct bad",
-                  text: formatCell(value, col),
-                }),
-                bar,
-              );
-            } else {
-              const logo =
-                col === "character"
-                  ? characterLogo(value)
-                  : ASCENSION_COLUMNS.has(col)
-                    ? ascensionIcon(value)
-                    : null;
-              const typeCell =
-                col === "type"
-                  ? fightTypeCell(value)
-                  : col === "relic"
-                    ? relicCell(value)
-                    : col === "card"
-                      ? cardCell(value)
-                    : col === "encounter" || col === "killed_by"
-                      ? encounterCell(value, col)
-                      : null;
-              if (logo) td.append(logo);
-              else if (typeCell) td.append(typeCell);
-              else td.textContent = formatCell(value, col);
-            }
-            return td;
-          }),
-        ),
-      ),
-    );
+    tbody.replaceChildren(...visible.map(rowElement));
     count.textContent =
       visible.length === data.length
         ? `${nf.format(data.length)} rows`
@@ -671,14 +669,15 @@ function renderTable(rows, host) {
     draw();
   });
   toolbar.append(searchInput);
-  if (state.tab === "relic_win_rate") toolbar.append(...relicSourceSelects());
+  if (state.tab === "relic_win_rate") toolbar.append(relicSourceSelect());
 
   const headRow = el("tr");
+  const filteredCols = new Set(); // columns that got a dropdown
   cols.forEach((col, i) => {
     const th = el("th", { scope: "col", tabindex: "0", text: columnLabel(col) });
     // Clicking cycles: first direction -> opposite direction -> back to default order.
     // Text starts A-Z; numbers start highest first.
-    const firstAscending = typeof data.find((row) => row[i] != null)?.[i] === "string";
+    const firstAscending = typeof data.find((row) => row.cells[i] != null)?.cells[i] === "string";
     const sort = () => {
       if (sortCol !== i) {
         sortCol = i;
@@ -705,45 +704,41 @@ function renderTable(rows, host) {
       state.tab === "killed_by" && col === "type"
         ? ["Regular combat", "Elite", "Boss", "Other"]
         : null;
-    const values =
-      fixed ||
-      [...new Set(data.map((row) => row[i]).filter((v) => v != null))].sort(compareFor(col));
-    if (!fixed && values.length < 2) return;
+    let values = fixed;
+    if (!values) {
+      // Distinct values, in the same order the column sorts.
+      const byValue = new Map();
+      for (const row of data) if (row.cells[i] != null) byValue.set(row.cells[i], row.keys[i]);
+      values = [...byValue].sort((a, b) => compareKeys(a[1], b[1])).map(([value]) => value);
+      if (values.length < 2) return;
+    }
     const select = el(
       "select",
       { "aria-label": `Filter by ${columnLabel(col)}` },
       el("option", { value: "", text: `All ${columnLabel(col).toLowerCase()}` }),
-      ...values.map((value) =>
-        el("option", { value: String(value), text: pretty(String(value)) }),
-      ),
+      ...values.map((value) => el("option", { value: String(value), text: pretty(String(value)) })),
     );
     // Re-apply the remembered choice, unless this data no longer offers that value.
-    if (selected.has(i) && values.map(String).includes(selected.get(i)))
-      select.value = selected.get(i);
+    if (selected.has(i) && values.map(String).includes(selected.get(i))) select.value = selected.get(i);
     else selected.delete(i);
     select.addEventListener("change", () => {
       if (select.value) selected.set(i, select.value);
       else selected.delete(i);
       draw();
     });
+    filteredCols.add(i);
     toolbar.append(select);
   });
   toolbar.append(count);
   // A remembered filter on a column that now has no dropdown (too few values) can't be cleared, so drop it.
-  for (const i of [...selected.keys()]) if (!toolbar.querySelector(`select[aria-label="Filter by ${columnLabel(cols[i])}"]`)) selected.delete(i);
+  for (const i of [...selected.keys()]) if (!filteredCols.has(i)) selected.delete(i);
 
   draw();
   swapView(
     host,
     toolbar,
-    el(
-      "div",
-      { class: "table-wrap" },
-      el("table", {}, el("thead", {}, headRow), tbody),
-    ),
-    cols.some((c) => c === "encounter" || c === "killed_by")
-      ? el("p", { class: "hint", text: "Weak = the easier pool of regular fights, met early in an act. Normal = the harder pool, met later." })
-      : null,
+    el("div", { class: "table-wrap" }, el("table", {}, el("thead", {}, headRow), tbody)),
+    ...(cols.includes("encounter") || cols.includes("killed_by") ? [el("p", { class: "hint", text: ENEMY_NOTE })] : []),
   );
 }
 
@@ -874,10 +869,11 @@ async function updateStatus() {
   setStatus(`${nf.format(s.runs)} runs in ${viewLabel()}`);
 }
 
-async function refresh() {
+// Reloads everything. withFilters: false when the dropdown options were just loaded (page start).
+async function refresh({ withFilters = true } = {}) {
   const loadId = ++state.loadId;
   try {
-    await fillFilters();
+    if (withFilters) await fillFilters();
     if (loadId !== state.loadId) return;
     writeHash();
     await Promise.all([
@@ -917,34 +913,28 @@ const RELIC_SOURCES = {
   ...Object.fromEntries(ANCIENT_NAMES.map((name) => [`ANCIENT_${name.toUpperCase()}`, name])),
 };
 
-function syncSourceFilter() {
-  const select = $("fSource");
-  if (!select.options.length)
-    select.replaceChildren(
-      el("option", { value: "", text: "All relics" }),
-      ...Object.entries(RELIC_SOURCES).map(([value, text]) => el("option", { value, text })),
-    );
-}
+const relicSourceOptions = () => [
+  el("option", { value: "", text: "All relics" }),
+  ...Object.entries(RELIC_SOURCES).map(([value, text]) => el("option", { value, text })),
+];
 
-// The visible dropdown, shown in the table toolbar on the Relic WR tab. The hidden #fSource keeps the value.
-function relicSourceSelects() {
-  syncSourceFilter();
+// The visible dropdown, shown in the table toolbar on the Relic WR tab. The hidden #fSource keeps the
+// value (so the URL, Reset and stats requests treat it like any other filter).
+function relicSourceSelect() {
   const select = el(
     "select",
     { "aria-label": "Relic source", title: "Neow or an Ancient. Starting relics are never counted." },
-    el("option", { value: "", text: "All relics" }),
-    ...Object.entries(RELIC_SOURCES).map(([value, text]) => el("option", { value, text })),
+    ...relicSourceOptions(),
   );
   select.value = $("fSource").value;
   select.addEventListener("change", () => {
     $("fSource").value = select.value;
-    $("fSource").dispatchEvent(new Event("change"));
+    refreshStats();
   });
-  return [select];
+  return select;
 }
 
 function renderTabs() {
-  syncSourceFilter();
   $("tabs").replaceChildren(
     ...state.tabs.map((tab) =>
       el("button", {
@@ -1198,13 +1188,9 @@ async function importFiles(files) {
 
 // ---------- startup ----------
 function resetFilters() {
-  $("fChar").value = "";
-  renderCharacterPicker();
-  $("fAsc").value = "";
-  $("fPatch").value = "";
-  $("fArea").value = "";
-  $("fSource").value = "";
+  for (const id of Object.values(FILTER_INPUTS)) $(id).value = "";
   $("fMin").value = 1;
+  renderCharacterPicker();
   refreshStats();
 }
 
@@ -1228,7 +1214,6 @@ function wireEvents() {
   $("fAsc").addEventListener("change", onFilter);
   $("fPatch").addEventListener("change", onFilter);
   $("fArea").addEventListener("change", onFilter);
-  $("fSource").addEventListener("change", onFilter);
   $("fMin").addEventListener("input", debounce(onFilter, 300));
   $("resetFilters").addEventListener("click", resetFilters);
 
@@ -1321,21 +1306,16 @@ async function main() {
   else if (initial.view?.scope === "me" && state.me)
     state.view = { scope: "profile", profile: state.me };
 
-  // Filter dropdowns are filled from the server; seed values from the URL first.
-  const { character, ascension, patch, area, source, min } = initial.filters;
-  $("fMin").value = min || 1;
+  // Filter dropdowns are filled from the server, then given the values from the URL.
+  // (A value the dropdown doesn't offer, like an unknown relic source, is ignored by the select.)
+  $("fSource").replaceChildren(...relicSourceOptions());
   renderScope();
   renderTabs();
-  await fillFilters().catch(() => {});
-  if (character) {
-    $("fChar").value = character;
-    renderCharacterPicker();
-  }
-  if (ascension) $("fAsc").value = ascension;
-  if (patch) $("fPatch").value = patch;
-  if (area) $("fArea").value = area;
-  if (source && Object.hasOwn(RELIC_SOURCES, source)) $("fSource").value = source;
-  await refresh();
+  const filtersLoaded = await fillFilters().then(() => true, () => false);
+  for (const [name, value] of Object.entries(initial.filters)) $(FILTER_INPUTS[name]).value = value;
+  if (!$("fMin").value) $("fMin").value = 1;
+  if (initial.filters.character) renderCharacterPicker();
+  await refresh({ withFilters: !filtersLoaded });
 }
 
 main();

@@ -107,12 +107,15 @@ worked out when the server starts (`lib/areas.js`): acts 2 and 3 are Hive and Gl
 depending on which act-1 enemies the run fought, learned from runs that already have their areas. A run whose enemies
 are unknown is skipped until its folder is imported again (nothing is duplicated).
 
-The **Relic WR** tab has a source dropdown in its table toolbar: Neow, all Ancients or one Ancient (Tezcatara, Tanx,
-Vakuu, Orobas, Darv, Nonupeipe, Pael), shop, elite fights, boss rewards, treasure chests, events, rest sites. It is
-stored per relic in `run_relics.origin` and read from the room type of the floor that gave the relic (`lib/relics.js`).
-Runs imported before it existed are filled in when the server starts, from the fights, events and card offers the
-database kept. That cannot tell a treasure chest from a rest site (and misses some shops with no card offers), so
-those relics show as treasure until the run is imported again, which sets the exact value.
+The **Relic WR** tab has a source dropdown in its table toolbar: Neow, all Ancients, or one Ancient (Tezcatara, Tanx,
+Vakuu, Orobas, Darv, Nonupeipe, Pael). The origin of every relic is stored in `run_relics.origin`, read from the room
+type of the floor that gave it (`lib/relics.js`). The database also keeps shop, elite, boss, treasure, event and rest
+site origins, and the API accepts them (`?source=SHOP`), but the dropdown doesn't offer them. Runs imported before the
+column existed are filled in when the server starts, from the fights, events and card offers the database kept. That
+cannot tell a treasure chest from a rest site, so those show as treasure until the run is imported again.
+
+On the Enemies and Killed by tabs, a **Weak** encounter is from the easier pool of regular fights met early in an act;
+**Normal** is the harder pool met later.
 
 ## Icons
 
@@ -135,3 +138,8 @@ visitors in some regions (for example the EU) may need a notice or a consent ban
 - Win rate for a card or relic means: of the runs that ended with it, the share that were wins.
   Starter cards and starting relics are left out of card and relic stats. Small samples are noisy, so raise "Min sample".
 - Event queries still exist in `db/queries.js` but are hidden from the site.
+- Images under `public/img/` and `card-info.json` are cached by browsers for a week (`vercel.json`, and the same rule
+  in `server.js`). If you replace an image with a new picture under the same name, visitors may see the old one for
+  up to a week; give it a new name or add `?v=2` where it is referenced. `app.js` and `style.css` are versioned with
+  `?v=N` in `index.html`; bump the number when you change them.
+- An upload imports up to 4 runs at once (`IMPORT_CONCURRENCY` in `lib/handler.js`).
