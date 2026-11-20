@@ -1,36 +1,11 @@
 # STS2 TRACKER
 
-Solo run statistics for Slay the Spire 2, stored in SQLite and shown on a local website.
+Solo run statistics for Slay the Spire 2.
 
-## Setup
+Create a profile or sign in, then choose **Import Run Folder** and select the folder that contains your `.run` files.
+On Windows it is in AppData:
 
-1. Install Node.js 22.
-2. In this folder, run:
-
-   npm install
-   npm start
-
-3. Open http://localhost:3000
-4. Create a profile or sign in, then choose **Import Run Folder** and select the folder that contains your `.run` files.
-   The browser uploads the selected files to the server.
-
-## Vercel
-
-Create a Turso database and auth token, then import this repository into Vercel with the **Other** framework preset.
-Set these project environment variables in Vercel:
-
-- `TURSO_DATABASE_URL`: the database URL from Turso.
-- `TURSO_AUTH_TOKEN`: the Turso auth token.
-- `IMPORT_TOKEN`: a separate long random admin key for backups and the admin SQL endpoint.
-
-Deploy after saving the variables. The database schema is created automatically. Everyone can view combined stats;
-users create or sign in to a profile to import and view their own runs.
-
-The website has no admin screen. `IMPORT_TOKEN` only protects two API endpoints, so a backup is one request:
-
-    curl -H "Authorization: Bearer <IMPORT_TOKEN>" https://<your-site>/api/export -o backup.json
-
-`POST /api/sql` (one `SELECT` per request, same header) is available for ad-hoc queries.
+    %AppData%\SlayTheSpire2\steam\<your Steam ID>\profile1\saves
 
 ## Profiles
 
@@ -46,22 +21,6 @@ Run files already in the global database can be re-uploaded after creating a pro
 profile's stats. Passwords are stored as salted scrypt hashes, and sign-in uses an expiring secure cookie. There is
 currently no password-reset flow.
 
-## Rate limiting
-
-Limits are stored in the database (`rate_limits` table), so they hold across Vercel instances. Exceeding one returns
-HTTP 429 with a `Retry-After` header.
-
-| Action                  | Limit                                              |
-| ----------------------- | -------------------------------------------------- |
-| Sign in                 | 8 attempts per username and 30 per network / 15 min |
-| Create profile          | 10 per network / hour                              |
-| Import                  | 120 requests per profile / 10 min                  |
-| Player search           | 120 per network / minute                           |
-| Admin SQL and backups   | 30 per network / 15 min                            |
-
-A successful sign-in clears that username's counter. Locally the network address is the socket address; on Vercel it is
-the first `x-forwarded-for` entry.
-
 ## What it does
 
 - **Imports selected `.run` files** from a folder in small batches. Repeated imports are safe.
@@ -73,18 +32,18 @@ the first `x-forwarded-for` entry.
 
 ## Files
 
-| File              | Purpose                                                     |
-| ----------------- | ----------------------------------------------------------- |
-| `db/schema.sql`   | Tables for profiles, sessions, unique runs, and run details |
-| `db/queries.js`   | Every statistic as a SQL query                              |
-| `lib/importer.js` | Parses one `.run` file into rows, rejects multiplayer       |
-| `lib/db.js`       | Opens local SQLite or remote Turso                          |
-| `lib/handler.js`  | Profile auth and shared API routes                          |
-| `lib/ratelimit.js`| Database-backed rate limiter                                |
-| `api/index.js`    | Vercel Function entry point                                 |
-| `server.js`       | Local development server                                    |
-| `public/`         | The website (HTML, CSS, JS)                                 |
-| `test/smoke.js`   | `npm test`                                                  |
+| File               | Purpose                                                     |
+| ------------------ | ----------------------------------------------------------- |
+| `db/schema.sql`    | Tables for profiles, sessions, unique runs, and run details |
+| `db/queries.js`    | Every statistic as a SQL query                              |
+| `lib/importer.js`  | Parses one `.run` file into rows, rejects multiplayer       |
+| `lib/db.js`        | Opens local SQLite or remote Turso                          |
+| `lib/handler.js`   | Profile auth and shared API routes                          |
+| `lib/ratelimit.js` | Database-backed rate limiter                                |
+| `api/index.js`     | Vercel Function entry point                                 |
+| `server.js`        | Local development server                                    |
+| `public/`          | The website (HTML, CSS, JS)                                 |
+| `test/smoke.js`    | `npm test`                                                  |
 
 Locally, the database lives at `data/spire-ledger.db`. Production data is stored in Turso.
 
@@ -117,12 +76,6 @@ cannot tell a treasure chest from a rest site, so those show as treasure until t
 On the Enemies and Killed by tabs, a **Weak** encounter is from the easier pool of regular fights met early in an act;
 **Normal** is the harder pool met later.
 
-## Icons
-
-Character logos live in `public/img/characters/` and ascension flames (levels 0-10) in `public/img/ascension/`.
-They replace the plain text in tables. Anything without an icon, such as a new character or an ascension above 10,
-falls back to text.
-
 ## Analytics
 
 The site loads one Google tag, the container `GTM-PTM5ZFBX` (set in `public/analytics.js`), which reports to Google
@@ -134,12 +87,9 @@ visitors in some regions (for example the EU) may need a notice or a consent ban
 
 ## Notes
 
-- The local development server listens only on your own machine (127.0.0.1). Vercel uses a serverless function.
 - Win rate for a card or relic means: of the runs that ended with it, the share that were wins.
   Starter cards and starting relics are left out of card and relic stats. Small samples are noisy, so raise "Min sample".
 - Event queries still exist in `db/queries.js` but are hidden from the site.
 - Images under `public/img/` and `card-info.json` are cached by browsers for a week (`vercel.json`, and the same rule
-  in `server.js`). If you replace an image with a new picture under the same name, visitors may see the old one for
-  up to a week; give it a new name or add `?v=2` where it is referenced. `app.js` and `style.css` are versioned with
-  `?v=N` in `index.html`; bump the number when you change them.
+  in `server.js`).
 - An upload imports up to 4 runs at once (`IMPORT_CONCURRENCY` in `lib/handler.js`).
