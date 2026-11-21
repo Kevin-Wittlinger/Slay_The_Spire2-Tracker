@@ -5,9 +5,9 @@
     <meta name="viewport" content="width=device-width,initial-scale=1" />
     <meta
       name="description"
-      content="Solo run statistics for Slay the Spire 2." />
+      content="Solo and multiplayer run statistics for Slay the Spire 2." />
     <title>STS2 Tracker</title>
-    <link rel="stylesheet" href="style.css?v=9" />
+    <link rel="stylesheet" href="style.css?v=10" />
     <script src="analytics.js"></script>
   </head>
   <body>
@@ -101,6 +101,14 @@
           <div id="charPicker"></div>
           <input id="fChar" type="hidden" value="" />
         </div>
+        <label title="Solo runs, multiplayer (co-op) runs, or both. A multiplayer run counts your own character, deck, relics and fights."
+          >Mode
+          <select id="fMode">
+            <option value="">Solo</option>
+            <option value="multi">Multiplayer</option>
+            <option value="all">Solo + multiplayer</option>
+          </select></label
+        >
         <label>Ascension <select id="fAsc"></select></label>
         <label>Patch <select id="fPatch"></select></label>
         <label title="Runs that passed through this area. Enemy and event stats only count that area's own rooms."
@@ -118,7 +126,8 @@
       <div class="cards" id="overview"></div>
       <p class="hint note">
         Abandoned runs are saved but never counted in any stat, win rate or
-        total.
+        total. Multiplayer runs count your own character, deck, relics and
+        fights; personal achievements are solo only.
       </p>
       <nav id="tabs" aria-label="Statistics"></nav>
       <div id="view" aria-live="polite"></div>
@@ -136,6 +145,6 @@
       Drop your .run files to import
     </div>
     <script src="trends.js?v=3"></script>
-    <script src="app.js?v=16"></script>
+    <script src="app.js?v=17"></script>
   </body>
 </html>

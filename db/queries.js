@@ -1,14 +1,19 @@
 // Every statistic on the site is one SQL query in this file.
-// Named parameters: @character, @ascension, @patch and @area (NULL = no filter; @source only filters Relic WR), @min (minimum sample size).
-// Abandoned runs are excluded everywhere. Multiplayer runs never reach the database.
+// Named parameters: @character, @ascension, @patch and @area (NULL = no filter; @source only filters Relic WR), @min (minimum sample size),
+// @mode ('solo' = solo runs only, the default; 'multi' = multiplayer runs only; 'all' = both).
+// Abandoned runs are excluded everywhere. A multiplayer run is a row per uploader, holding their own
+// character, deck, relics and room stats; run_players lists who they played with.
 const { rowsToObjects } = require("../lib/db");
 
-const FILTER = `(@character IS NULL OR r.character = @character)
-  AND (@ascension IS NULL OR r.ascension = @ascension)
-  AND (@patch IS NULL OR r.build_id = @patch)
+const MODE = (r) => `(@mode = 'all' OR (@mode = 'multi') = (${r}.player_count > 1))`;
+// The usual filters for runs under alias r. mode: false leaves out the solo/multiplayer filter.
+const filterFor = (r, { mode = true } = {}) => `(@character IS NULL OR ${r}.character = @character)
+  AND (@ascension IS NULL OR ${r}.ascension = @ascension)
+  AND (@patch IS NULL OR ${r}.build_id = @patch)
   AND (@area IS NULL OR EXISTS (
-    SELECT 1 FROM run_acts ra WHERE ra.run_id = r.run_id AND ra.area = @area
-  ))`;
+    SELECT 1 FROM run_acts ra WHERE ra.run_id = ${r}.run_id AND ra.area = @area
+  ))${mode ? `\n  AND ${MODE(r)}` : ""}`;
+const FILTER = filterFor("r");
 // Fights and events are further limited to the rooms that happened inside the chosen area.
 const inArea = (alias) => `(@area IS NULL OR EXISTS (
   SELECT 1 FROM run_acts ra
@@ -21,6 +26,11 @@ const BASE = `r.abandoned = 0 AND ${FILTER} AND ${PROFILE_FILTER}`;
 
 // Every character begins with one of these, so they say nothing about a run. Left out of relic stats.
 const { STARTING_RELIC_LIST } = require("../lib/relics");
+
+// "profile_id|username" of the site profile that owns a Steam id, or "|" when no one does.
+const SITE_PROFILE = (steamRef) => `COALESCE((
+  SELECT p.profile_id || '|' || p.username FROM profiles p
+  WHERE p.steam_id = ${steamRef} ORDER BY p.profile_id LIMIT 1), '|')`;
 
 const TABS = {
   overview: {
@@ -271,6 +281,20 @@ const TABS = {
               FROM profile_runs pr JOIN profiles p ON p.profile_id = pr.profile_id
               WHERE pr.run_id = r.run_id) AS player,
              r.character,
+             -- Multiplayer: "steam_id|profile_id|username|character|wins|runs;..." per teammate, where
+             -- wins/runs is this player's record with that teammate (any character or area; the
+             -- ascension and patch filters apply).
+             (SELECT group_concat(
+                       t.player_id || '|' || ${SITE_PROFILE("t.player_id")} || '|' || COALESCE(t.character, '')
+                       || '|' || (SELECT COALESCE(SUM(r2.win), 0) || '|' || COUNT(*)
+                                  FROM runs r2
+                                  JOIN run_players t2 ON t2.run_id = r2.run_id AND t2.player_id = t.player_id
+                                  WHERE r2.player_id = r.player_id AND r2.abandoned = 0
+                                    AND (@ascension IS NULL OR r2.ascension = @ascension)
+                                    AND (@patch IS NULL OR r2.build_id = @patch)),
+                       ';')
+              FROM run_players t
+              WHERE t.run_id = r.run_id AND t.player_id <> r.player_id) AS teammates,
              r.ascension,
              CASE r.win WHEN 1 THEN 'WIN' ELSE 'LOSS' END AS result,
              r.killed_by,
@@ -280,6 +304,26 @@ const TABS = {
       WHERE r.abandoned = 0 AND ${FILTER} AND ${PROFILE_FILTER}
       ORDER BY r.start_time DESC
       LIMIT 100`,
+  },
+
+  teammates: {
+    title: "Teammates",
+    // Everyone played with in multiplayer runs, and the win rate of those runs. Always multiplayer,
+    // whatever the Mode filter says (solo runs have no teammates). @character is your character.
+    sql: `
+      SELECT t.player_id || '|' || ${SITE_PROFILE("t.player_id")} AS teammate,
+             group_concat(DISTINCT t.character) AS played_as,
+             COUNT(*) AS runs,
+             SUM(r.win) AS wins,
+             ROUND(100.0 * SUM(r.win) / COUNT(*), 1) AS win_pct,
+             datetime(MAX(r.start_time), 'unixepoch', 'localtime') AS last_played
+      FROM run_players t
+      JOIN runs r ON r.run_id = t.run_id
+      WHERE t.player_id <> r.player_id AND r.abandoned = 0
+        AND ${filterFor("r", { mode: false })} AND ${PROFILE_FILTER}
+      GROUP BY t.player_id
+      HAVING runs >= @min
+      ORDER BY runs DESC, win_pct DESC`,
   },
 
   trends: {
@@ -301,7 +345,8 @@ async function runQuery(db, id, raw = {}) {
   if (!t) return null;
   const names = [...new Set([...t.sql.matchAll(/@(\w+)/g)].map((m) => m[1]))];
   const params = {};
-  for (const n of names) params[n] = raw[n] ?? (n === "min" ? 1 : null);
+  const defaults = { min: 1, mode: "solo" };
+  for (const n of names) params[n] = raw[n] ?? defaults[n] ?? null;
   return rowsToObjects(await db.execute({ sql: t.sql, args: params }));
 }
 

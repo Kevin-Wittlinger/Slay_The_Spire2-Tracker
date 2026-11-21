@@ -817,6 +817,80 @@ async function main() {
     assert.strictEqual((await dispatch(handler, "/api/achievements")).status, 400);
   }
 
+  // Multiplayer runs: stored from the uploader's side, filtered by mode, with teammates listed.
+  {
+    const mpDb = await openDb(":memory:");
+    const mpApi = createHandler(mpDb);
+    const ME = "76561198000000001";
+    const MATE = "76561198000000002";
+    const OTHER = "76561198000000003";
+    const coop = (seed, win, mate = MATE) => {
+      const run = makeRun({ seed, win, players: 2 });
+      run.players = [
+        { ...run.players[0], id: mate, character: "CHARACTER.SILENT", deck: [{ id: "CARD.FLANKING", floor_added_to_deck: 2 }] },
+        { ...run.players[1], id: ME, character: "CHARACTER.IRONCLAD", deck: [{ id: "CARD.TAG_TEAM", floor_added_to_deck: 2 }] },
+      ];
+      for (const act of run.map_point_history)
+        for (const mp of act) {
+          const stats = mp.player_stats[0] || {};
+          mp.player_stats = [
+            { ...stats, player_id: mate, damage_taken: 1, card_choices: [] },
+            { ...stats, player_id: ME, damage_taken: 9 },
+          ];
+        }
+      return run;
+    };
+    const register = await dispatch(mpApi, "/api/register", "POST", { username: "duo", password: "abcde" });
+    const cookie = register.headers["Set-Cookie"].split(";")[0];
+    const imports = async (body) =>
+      JSON.parse((await dispatch(mpApi, "/api/import", "POST", body, undefined, cookie)).body);
+
+    // One multiplayer run alone doesn't say which player you are, so it is skipped...
+    assert.strictEqual((await imports([coop("M1", true)])).multiplayer, 1);
+    // ...but the Steam id from the folder path is enough, and is remembered on the profile.
+    let result = await imports({ runs: [coop("M1", true), makeRun({ seed: "S1" })], playerId: ME });
+    assert.strictEqual(result.imported, 2);
+    assert.strictEqual(result.coop, 1);
+    result = await imports([coop("M2", false), coop("M3", false, OTHER)]);
+    assert.strictEqual(result.imported, 2);
+    // A Steam id that lost precision as a JS number is refused rather than stored wrong.
+    assert.strictEqual(require("../lib/multiplayer").steamId(76561198000000001), null);
+
+    const row = (await mpDb.execute("SELECT * FROM runs WHERE seed = 'M1'")).rows[0];
+    assert.strictEqual(row.character, "CHARACTER.IRONCLAD");
+    assert.strictEqual(Number(row.player_count), 2);
+    assert.strictEqual(row.run_id, `M1:1794596230:${ME}`);
+    const myDamage = await mpDb.execute({ sql: "SELECT DISTINCT damage FROM fights WHERE run_id = ?", args: [row.run_id] });
+    assert.deepStrictEqual(myDamage.rows.map((r) => Number(r.damage)), [9]);
+
+    const stat = async (path) => JSON.parse((await dispatch(mpApi, `/api/stats/${path}`)).body);
+    assert.strictEqual((await stat("overview"))[0].runs, 1); // solo is the default
+    assert.strictEqual((await stat("overview?mode=multi"))[0].runs, 3);
+    assert.strictEqual((await stat("overview?mode=all"))[0].runs, 4);
+    assert.strictEqual((await stat("overview?mode=bogus"))[0].runs, 1);
+    const cards = (await stat("card_win_rate?mode=multi")).map((r) => r.card);
+    assert.ok(cards.includes("CARD.TAG_TEAM") && !cards.includes("CARD.FLANKING"));
+
+    const mates = await stat("teammates");
+    assert.deepStrictEqual(
+      mates.map((m) => [m.teammate, m.runs, m.win_pct, m.played_as]),
+      [[`${MATE}||`, 2, 50, "CHARACTER.SILENT"], [`${OTHER}||`, 1, 0, "CHARACTER.SILENT"]],
+    );
+    const recent = await stat("recent_runs?mode=multi");
+    const m1 = recent.find((r) => r.result === "WIN");
+    assert.strictEqual(m1.teammates, `${MATE}|||CHARACTER.SILENT|1|2`);
+    assert.ok((await stat("recent_runs")).every((r) => r.teammates === null));
+
+    // Once the teammate has a profile with their Steam id, they show by name.
+    await mpDb.execute({
+      sql: "INSERT INTO profiles (username, password_salt, password_hash, created_at, steam_id) VALUES ('mate','s','h',0,?)",
+      args: [MATE],
+    });
+    assert.match((await stat("teammates"))[0].teammate, new RegExp(`^${MATE}\\|\\d+\\|mate$`));
+    assert.strictEqual((await mpDb.execute("SELECT steam_id FROM profiles WHERE username = 'duo'")).rows[0].steam_id, ME);
+    await mpDb.close();
+  }
+
   // Account creation is limited per network address.
   let lastStatus;
   for (let i = 0; i < 12; i++) {

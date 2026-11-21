@@ -1,6 +1,6 @@
 # STS2 TRACKER
 
-Solo run statistics for Slay the Spire 2.
+Solo and multiplayer run statistics for Slay the Spire 2.
 
 Create a profile or sign in, then choose **Import Run Folder** and select the folder that contains your `.run` files.
 On Windows it is in AppData:
@@ -39,8 +39,15 @@ soon as someone imports a run with it. The rules are in `lib/achievements.js`.
 
 - **Imports selected `.run` files** from a folder in small batches. Repeated imports are safe.
 - **Stores cloud data in Turso** so imported runs remain available between Vercel function calls.
-- **Solo only.** Any file with more than one player is skipped and counted as "multiplayer skipped" in the status line.
-- **No double counting.** A run is identified by seed plus start time, so repeated uploads are safe.
+- **Solo and multiplayer.** The **Mode** filter shows solo runs (the default), multiplayer runs, or both. A
+  multiplayer run is stored from the uploader's side (their character, deck, relics, card picks and fights), so
+  multiplayer-only cards (tagged "Co-op") show up in the card tables. **Recent runs** lists who you played with and
+  your win rate with each of them, and the **Teammates** tab sums it up per teammate. Run files only hold Steam ids,
+  so the uploader's id comes from the Steam folder in the path, or as the one player in all the selected multiplayer
+  runs; it is then remembered on the profile. A teammate shows by username once they import their own runs here,
+  otherwise as a link to their Steam profile. Personal achievements stay solo only.
+- **No double counting.** A run is identified by seed plus start time (plus the uploader's Steam id for
+  multiplayer), so repeated uploads are safe.
 - Abandoned runs are excluded from all stats and counts. They are stored, and the **Abandoned** card on the overview
   shows how many there are, so a player's imported total can be larger than the runs shown.
 
@@ -50,7 +57,8 @@ soon as someone imports a run with it. The rules are in `lib/achievements.js`.
 | ------------------ | ----------------------------------------------------------- |
 | `db/schema.sql`    | Tables for profiles, sessions, unique runs, and run details |
 | `db/queries.js`    | Every statistic as a SQL query                              |
-| `lib/importer.js`  | Parses one `.run` file into rows, rejects multiplayer       |
+| `lib/importer.js`  | Parses one `.run` file into rows (solo or multiplayer)      |
+| `lib/multiplayer.js` | Steam ids, finding the uploader, multiplayer migrations   |
 | `lib/db.js`        | Opens local SQLite or remote Turso                          |
 | `lib/handler.js`   | Profile auth and shared API routes                          |
 | `lib/ratelimit.js` | Database-backed rate limiter                                |

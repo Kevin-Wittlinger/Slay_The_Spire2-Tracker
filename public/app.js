@@ -28,7 +28,20 @@ const COLUMN_LABELS = {
   killed_by: "Killed by",
   fights: "Fights",
   run_wins: "Run wins",
+  teammates: "Played with (your WR together)",
+  played_as: "Played as",
+  last_played: "Last played",
 };
+
+// Cards that only exist in multiplayer (they help or target a teammate). Shown with a "Co-op" tag.
+const COOP_CARDS = new Set(
+  [
+    "BEACON_OF_HOPE", "BELIEVE_IN_YOU", "COORDINATE", "DEMONIC_SHIELD", "ENERGY_SURGE",
+    "FLANKING", "GANG_UP", "GLIMPSE_BEYOND", "HAMMER_TIME", "HUDDLE_UP", "IGNITION",
+    "INTERCEPT", "KNOCKDOWN", "LARGESSE", "LEGION_OF_BONE", "LIFT", "MIMIC", "RALLY",
+    "SNEAKY", "TAG_TEAM", "TANK",
+  ].map((id) => `CARD.${id}`),
+);
 
 // Tabs whose default order is alphabetical, and the column they sort by.
 const ALPHABETICAL_TABS = {
@@ -202,7 +215,87 @@ function encounterCell(value, col) {
 // Card picture + name, from the wiki card list: CARD.BASH -> img/cards/bash.png.
 function cardCell(value) {
   const match = typeof value === "string" && value.match(/^CARD\.([A-Z0-9_]+)$/);
-  return match ? iconCell(`img/cards/${match[1].toLowerCase()}.png`, value, "card", "cell-icon card-thumb") : null;
+  if (!match) return null;
+  const cell = iconCell(`img/cards/${match[1].toLowerCase()}.png`, value, "card", "cell-icon card-thumb");
+  if (COOP_CARDS.has(value))
+    cell.append(el("span", { class: "coop-tag", text: "Co-op", title: "Multiplayer-only card" }));
+  return cell;
+}
+
+// ---------- teammates ----------
+// "steam_id|profile_id|username|character|wins|runs" (the last three only in Recent runs).
+// profile_id and username are empty when the teammate has no profile on this site.
+function parseTeammate(raw) {
+  const [steam = "", profileId, username, character, wins, runs] = String(raw).split("|");
+  return {
+    steam,
+    profile: Number(profileId) > 0 && username ? { id: Number(profileId), username } : null,
+    character: character || null,
+    wins: wins ? Number(wins) : 0,
+    runs: runs ? Number(runs) : 0,
+  };
+}
+
+const teammateName = (mate) => mate.profile?.username || `Steam …${mate.steam.slice(-4)}`;
+const teammateWinPct = (mate) => (mate.runs ? Math.round((1000 * mate.wins) / mate.runs) / 10 : null);
+// Plain text for searching and sorting: "alice (Silent, 50% of 2)".
+function teammateText(mate) {
+  const extra = [mate.character && pretty(mate.character), mate.runs && `${teammateWinPct(mate)}% of ${mate.runs}`];
+  const details = extra.filter(Boolean).join(", ");
+  return details ? `${teammateName(mate)} (${details})` : teammateName(mate);
+}
+
+// A teammate with a profile here links to their stats; anyone else to their Steam profile.
+function teammateLink(mate) {
+  if (mate.profile) {
+    return el("button", {
+      type: "button",
+      class: "user-link",
+      title: `View ${mate.profile.username}'s stats`,
+      text: mate.profile.username,
+      onclick: () => viewPlayer(mate.profile),
+    });
+  }
+  return el("a", {
+    class: "user-link",
+    href: `https://steamcommunity.com/profiles/${encodeURIComponent(mate.steam)}`,
+    target: "_blank",
+    rel: "noopener noreferrer",
+    title: `Steam id ${mate.steam} (no profile on this site)`,
+    text: teammateName(mate),
+  });
+}
+
+function appendTeammates(row, td) {
+  for (const mate of row.mates || []) {
+    const pct = teammateWinPct(mate);
+    td.append(
+      el(
+        "span",
+        { class: "mate" },
+        mate.character ? characterLogo(mate.character, 0.55) : null,
+        teammateLink(mate),
+        pct === null
+          ? null
+          : el("span", {
+              class: `mate-wr ${pct >= 50 ? "good" : "bad"}`,
+              title: `Your record with ${teammateName(mate)}: ${mate.wins} wins in ${mate.runs} runs`,
+              text: `${pct}% · ${mate.wins}/${mate.runs}`,
+            }),
+      ),
+    );
+  }
+}
+
+// "CHARACTER.SILENT,CHARACTER.DEFECT" -> a row of small logos.
+function characterListCell(value) {
+  if (typeof value !== "string" || !value) return null;
+  const chars = sortCharacters(value.split(","));
+  return el(
+    "span",
+    { class: "char-list" },
+    ...chars.map((c) => characterLogo(c, 0.6) || el("span", { text: pretty(c) })),
+  );
 }
 
 // Hovering a card (picture or name) in a table shows it full size beside the pointer so its text can
@@ -372,6 +465,7 @@ function debounce(fn, ms) {
 // Every filter: its name in the URL and the API, and the input that holds it. The URL hash, the
 // stats requests, the empty-table message and Reset all read this one list.
 const FILTER_INPUTS = {
+  mode: "fMode", // "" = solo, "multi" or "all"
   character: "fChar",
   ascension: "fAsc",
   patch: "fPatch",
@@ -554,7 +648,17 @@ const CELL_RENDERERS = {
   card: cardCell,
   encounter: encounterCell,
   killed_by: encounterCell,
+  played_as: characterListCell,
 };
+
+// What the search box matches for a cell, where that differs from the text shown.
+const SEARCH_TEXT = {
+  card: (value) => `${pretty(value)}${COOP_CARDS.has(value) ? " co-op" : ""}`,
+  played_as: (value) => String(value).split(",").map(pretty).join(", "),
+};
+
+// Columns holding teammates ("teammates": several, with your record; "teammate": one).
+const TEAMMATE_COLUMNS = ["teammates", "teammate"];
 
 const ENEMY_NOTE =
   "Weak = the easier pool of regular fights, met early in an act. Normal = the harder pool, met later.";
@@ -563,6 +667,11 @@ function buildCell(row, col, value) {
   const td = el("td");
   if (col === "player") {
     appendPlayers(row, td);
+    return td;
+  }
+  if (TEAMMATE_COLUMNS.includes(col)) {
+    td.className = "mates-cell";
+    appendTeammates(row, td);
     return td;
   }
   if (typeof value === "number") td.className = "num";
@@ -606,8 +715,19 @@ function renderTable(rows, host) {
       row.players = parsePlayers(row.cells[i]);
       row.cells[i] = row.players.map((p) => p.username).join(", ");
     }
+    const mateCol = cols.findIndex((col) => TEAMMATE_COLUMNS.includes(col));
+    if (mateCol >= 0) {
+      // Same idea: the teammates stay on the row for drawing, the cell becomes readable text.
+      const raw = row.cells[mateCol];
+      row.mates = raw ? String(raw).split(";").map(parseTeammate) : [];
+      row.cells[mateCol] = row.mates.map(teammateText).join(", ") || null;
+    }
     row.keys = row.cells.map((value, i) => sortKey(value, cols[i]));
-    row.text = row.cells.map((value) => formatCell(value, "").toLowerCase()).join("\n");
+    row.text = row.cells
+      .map((value, i) =>
+        (value != null && SEARCH_TEXT[cols[i]] ? SEARCH_TEXT[cols[i]](value) : formatCell(value, "")).toLowerCase(),
+      )
+      .join("\n");
     return row;
   });
   const rowElement = (row) =>
@@ -750,8 +870,9 @@ function renderTable(rows, host) {
 async function renderOverview(loadId) {
   const [o] = await api(`/api/stats/overview?${statsQuery()}`);
   if (loadId !== state.loadId) return;
+  const runsLabel = { multi: "Multiplayer runs", all: "Solo + multiplayer runs" }[$("fMode").value] || "Solo runs";
   const items = [
-    ["Solo runs", nf.format(o.runs)],
+    [runsLabel, nf.format(o.runs)],
     ["Wins", nf.format(o.wins)],
     ["Win rate", `${o.win_pct}%`],
     ["Avg run length", `${o.avg_minutes} min`],
@@ -808,7 +929,10 @@ async function renderView(loadId) {
         ? api(`/api/stats/${state.tab}?${statsQuery({ allCharacters: true })}`)
         : null,
     ]);
-    const shown = tab?.kind === "trends" ? rows : await withCardInfo(rows);
+    let shown = tab?.kind === "trends" ? rows : await withCardInfo(rows);
+    // Solo runs have no teammates, so an all-solo table leaves that column out.
+    if (shown.length && "teammates" in shown[0] && shown.every((row) => !row.teammates))
+      shown = shown.map(({ teammates, ...row }) => row);
     if (loadId !== state.loadId) return;
     if (tab?.kind === "trends") renderTrends(rows, host, { character, allRows });
     else renderTable(shown, host);
@@ -950,6 +1074,8 @@ function renderTabs() {
         onclick: () => {
           state.tab = tab.id;
           tableMemory = null;
+          // Teammates are multiplayer-only; switch Mode so the cards above describe the same runs.
+          if (tab.id === "teammates" && !$("fMode").value) $("fMode").value = "multi";
           renderTabs();
           refreshStats();
         },
@@ -1197,6 +1323,27 @@ async function signOut() {
 }
 
 // ---------- import ----------
+// The Steam id found in every multiplayer run of the selection, if exactly one is (same rule as the
+// server's inferSelfId). Solo runs list player id 1, so only multiplayer files have 17-digit ids.
+async function inferSteamId(files, maxBytes) {
+  const counts = new Map();
+  let multi = 0;
+  for (const file of files) {
+    if (file.size > maxBytes) continue;
+    let text;
+    try {
+      text = await file.text();
+    } catch {
+      continue; // unreadable files are counted as invalid by the import itself
+    }
+    const ids = new Set([...text.matchAll(/"(?:id|player_id)"\s*:\s*"?(7656\d{13})\b/g)].map((m) => m[1]));
+    if (ids.size < 2) continue;
+    multi++;
+    for (const id of ids) counts.set(id, (counts.get(id) || 0) + 1);
+  }
+  const everywhere = [...counts].filter(([, n]) => n === multi).map(([id]) => id);
+  return multi >= 2 && everywhere.length === 1 ? everywhere[0] : null;
+}
 async function importFiles(files) {
   if (!state.me) {
     setStatus("Create a profile or sign in before importing runs.", "warn");
@@ -1220,17 +1367,32 @@ async function importFiles(files) {
     multiplayer: 0,
     invalid: 0,
     abandoned: 0,
+    coop: 0,
   };
   const maxBatchBytes = 3 * 1024 * 1024;
   let batch = [];
   let batchBytes = 2;
   let processed = 0;
+  // Multiplayer runs are stored from your side, so the server needs your Steam id. Picking the Steam
+  // folder (or anything above it) puts it in the path: .../steam/7656119.../profile1/saves/history.
+  // Otherwise it is the one player in all of the selected multiplayer runs (worked out over the whole
+  // selection first, since a single batch may only hold runs with the same teammate).
+  const pathIds = new Set(
+    runFiles
+      .map((file) => (file.webkitRelativePath || "").match(/(?:^|\/)(7656\d{13})(?:\/|$)/)?.[1])
+      .filter(Boolean),
+  );
+  let playerId = pathIds.size === 1 ? [...pathIds][0] : null;
+  if (!playerId) {
+    setStatus("Reading runs...");
+    playerId = await inferSteamId(runFiles, maxBatchBytes);
+  }
 
   const sendBatch = async () => {
     if (!batch.length) return;
     const result = await api("/api/import", {
       method: "POST",
-      body: JSON.stringify(batch),
+      body: JSON.stringify(playerId ? { runs: batch, playerId } : batch),
     });
     for (const key of Object.keys(totals)) totals[key] += result[key] || 0;
     state.dataVersion = Date.now();
@@ -1249,7 +1411,10 @@ async function importFiles(files) {
       }
       let run;
       try {
-        run = JSON.parse(await file.text());
+        // Steam ids (17 digits) don't fit in a JS number, so they're turned into strings first.
+        run = JSON.parse(
+          (await file.text()).replace(/("(?:id|player_id)"\s*:\s*)(\d{16,})/g, '$1"$2"'),
+        );
       } catch {
         totals.invalid++;
         continue;
@@ -1260,13 +1425,17 @@ async function importFiles(files) {
       batchBytes += file.size + 1;
     }
     await sendBatch();
+    const notes = [];
+    if (totals.coop) notes.push(`${totals.coop} multiplayer`);
+    if (totals.abandoned) notes.push(`${totals.abandoned} abandoned, not counted in stats`);
     const parts = [
-      totals.abandoned
-        ? `${totals.imported} imported (${totals.abandoned} abandoned, not counted in stats)`
-        : `${totals.imported} imported`,
+      notes.length ? `${totals.imported} imported (${notes.join("; ")})` : `${totals.imported} imported`,
     ];
     if (totals.duplicate) parts.push(`${totals.duplicate} already added`);
-    if (totals.multiplayer) parts.push(`${totals.multiplayer} multiplayer skipped`);
+    if (totals.multiplayer)
+      parts.push(
+        `${totals.multiplayer} multiplayer skipped (couldn't tell which player is you; import your whole history folder, or the Steam folder above it)`,
+      );
     if (totals.invalid) parts.push(`${totals.invalid} invalid`);
     await setView("me");
     setStatus(`Done: ${parts.join(", ")}.`, "live");
@@ -1307,6 +1476,7 @@ function wireEvents() {
 
   setupCardPreview();
   const onFilter = () => refreshStats();
+  $("fMode").addEventListener("change", onFilter);
   $("fAsc").addEventListener("change", onFilter);
   $("fPatch").addEventListener("change", onFilter);
   $("fArea").addEventListener("change", onFilter);

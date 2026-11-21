@@ -1,4 +1,7 @@
--- Spire Ledger schema. One row per SOLO run in `runs`; everything else hangs off run_id.
+-- Spire Ledger schema. One row per run in `runs`; everything else hangs off run_id.
+-- A multiplayer run is stored from the uploader's side: their character, deck, relics and room stats
+-- (see lib/multiplayer.js). player_count, player_id and profiles.steam_id are added to older databases
+-- at start-up.
 
 CREATE TABLE IF NOT EXISTS runs (
   run_id      TEXT PRIMARY KEY,      -- seed + ':' + start_time, unique per run
@@ -10,7 +13,9 @@ CREATE TABLE IF NOT EXISTS runs (
   killed_by   TEXT,                  -- encounter or event that ended the run
   run_time    INTEGER,               -- seconds
   start_time  INTEGER,               -- unix seconds
-  build_id    TEXT
+  build_id    TEXT,
+  player_count INTEGER NOT NULL DEFAULT 1, -- 1 = solo, 2+ = multiplayer
+  player_id   TEXT                   -- multiplayer: the uploader's Steam id (NULL for solo)
 );
 
 CREATE TABLE IF NOT EXISTS profiles (
@@ -18,7 +23,8 @@ CREATE TABLE IF NOT EXISTS profiles (
   username      TEXT NOT NULL COLLATE NOCASE UNIQUE,
   password_salt TEXT NOT NULL,
   password_hash TEXT NOT NULL,
-  created_at    INTEGER NOT NULL
+  created_at    INTEGER NOT NULL,
+  steam_id      TEXT                 -- learned from the first multiplayer import
 );
 
 CREATE TABLE IF NOT EXISTS profile_sessions (
@@ -75,6 +81,15 @@ CREATE TABLE IF NOT EXISTS run_acts (
   PRIMARY KEY (run_id, act)
 );
 
+-- Everyone who played in a multiplayer run (the uploader included), in the file's player order.
+CREATE TABLE IF NOT EXISTS run_players (
+  run_id    TEXT NOT NULL REFERENCES runs(run_id) ON DELETE CASCADE,
+  slot      INTEGER NOT NULL,
+  player_id TEXT NOT NULL,           -- Steam id
+  character TEXT,
+  PRIMARY KEY (run_id, slot)
+);
+
 -- Every combat. died = 1 when HP reached 0 in that room.
 CREATE TABLE IF NOT EXISTS fights (
   run_id       TEXT NOT NULL REFERENCES runs(run_id) ON DELETE CASCADE,
@@ -112,4 +127,5 @@ CREATE INDEX IF NOT EXISTS idx_fights_run    ON fights(run_id);
 CREATE INDEX IF NOT EXISTS idx_events_event  ON events(event_id);
 CREATE INDEX IF NOT EXISTS idx_events_run    ON events(run_id);
 CREATE INDEX IF NOT EXISTS idx_profile_sessions_expiry ON profile_sessions(expires_at);
+CREATE INDEX IF NOT EXISTS idx_run_players_player ON run_players(player_id);
 CREATE INDEX IF NOT EXISTS idx_profile_runs_run ON profile_runs(run_id);

@@ -374,8 +374,51 @@ button.user-link {
   text-decoration: underline;
   text-underline-offset: 2px;
 }
-button.user-link:hover {
+button.user-link:hover,
+a.user-link:hover {
   filter: brightness(1.2);
+}
+a.user-link {
+  color: var(--accent);
+  text-underline-offset: 2px;
+}
+/* ---------- multiplayer ---------- */
+td.mates-cell {
+  min-width: 180px;
+}
+.mate {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 4px 8px;
+}
+.mate + .mate {
+  margin-top: 4px;
+}
+.mate-wr {
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+}
+.mate-wr.good {
+  color: var(--good);
+}
+.mate-wr.bad {
+  color: var(--bad);
+}
+.char-list {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+}
+.coop-tag {
+  padding: 0 6px;
+  border: 1px solid var(--accent);
+  border-radius: 999px;
+  color: var(--accent);
+  font-size: 11px;
+  line-height: 16px;
+  white-space: nowrap;
 }
 /* ---------- Trends chart ---------- */
 .trend-wrap {
