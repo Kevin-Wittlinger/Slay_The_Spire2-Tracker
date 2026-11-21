@@ -81,7 +81,7 @@ depending on which act-1 enemies the run fought, learned from runs that already 
 are unknown is skipped until its folder is imported again (nothing is duplicated).
 
 The **Relic WR** tab has a source dropdown in its table toolbar: Neow, all Ancients, or one Ancient (Tezcatara, Tanx,
-Vakuu, Orobas, Darv, Nonupeipe, Pael). The origin of every relic is stored in `run_relics.origin`, read from the room
+Vakuu, Orobas, Darv, Nonupeipe, Pael), or **No Neow or Ancients** for every other relic. The origin of every relic is stored in `run_relics.origin`, read from the room
 type of the floor that gave it (`lib/relics.js`). The database also keeps shop, elite, boss, treasure, event and rest
 site origins, and the API accepts them (`?source=SHOP`), but the dropdown doesn't offer them. Runs imported before the
 column existed are filled in when the server starts, from the fights, events and card offers the database kept. That

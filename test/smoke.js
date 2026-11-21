@@ -433,6 +433,12 @@ async function main() {
   assert.strictEqual(await apiRelics("?source=ANCIENT_VAKUU"), 1);
   assert.strictEqual(await apiRelics("?source=ANCIENT"), 2);
   assert.strictEqual(await apiRelics("?source=bogus"), 9);
+  // "No Neow or Ancients" is everything else: the three choices add up to all relics.
+  assert.strictEqual(
+    (await apiRelics("?source=NEOW")) + (await apiRelics("?source=ANCIENT")) + (await apiRelics("?source=NOT_ANCIENT")),
+    9,
+  );
+  assert.ok((await apiRelics("?source=NOT_ANCIENT")) >= 5);
   await relicDb.close();
 
   // Caching: shared statistics may be cached briefly, anything tied to the signed-in user never.

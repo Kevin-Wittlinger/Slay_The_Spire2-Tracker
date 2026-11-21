@@ -123,7 +123,10 @@ const TABS = {
         JOIN runs r ON r.run_id = x.run_id
         WHERE x.relic_id NOT IN (${STARTING_RELIC_LIST}) AND ${BASE}
           AND (@source IS NULL OR x.origin = @source
-               OR (@source = 'ANCIENT' AND substr(x.origin, 1, 8) = 'ANCIENT_'))
+               OR (@source = 'ANCIENT' AND substr(x.origin, 1, 8) = 'ANCIENT_')
+               -- every relic that didn't come from Neow or an Ancient (shops, chests, fights, events...)
+               OR (@source = 'NOT_ANCIENT' AND COALESCE(x.origin, '') <> 'NEOW'
+                   AND substr(COALESCE(x.origin, ''), 1, 8) <> 'ANCIENT_'))
       )
       GROUP BY relic
       HAVING runs >= @min

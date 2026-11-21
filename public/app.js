@@ -915,6 +915,7 @@ const RELIC_SOURCES = {
   NEOW: "Neow",
   ANCIENT: "All Ancients",
   ...Object.fromEntries(ANCIENT_NAMES.map((name) => [`ANCIENT_${name.toUpperCase()}`, name])),
+  NOT_ANCIENT: "No Neow or Ancients", // every other relic: shops, chests, fights, events...
 };
 
 const relicSourceOptions = () => [
@@ -927,7 +928,7 @@ const relicSourceOptions = () => [
 function relicSourceSelect() {
   const select = el(
     "select",
-    { "aria-label": "Relic source", title: "Neow or an Ancient. Starting relics are never counted." },
+    { "aria-label": "Relic source", title: "Where the relic came from: Neow, an Ancient, or anywhere else. Starting relics are never counted." },
     ...relicSourceOptions(),
   );
   select.value = $("fSource").value;
