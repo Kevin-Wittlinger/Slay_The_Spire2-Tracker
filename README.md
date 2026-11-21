@@ -21,6 +21,20 @@ Run files already in the global database can be re-uploaded after creating a pro
 profile's stats. Passwords are stored as salted scrypt hashes, and sign-in uses an expiring secure cookie. There is
 currently no password-reset flow.
 
+## Personal achievements
+
+Signed-in players get a **Personal achievements** button next to **My profile**. It shows three badges, worked out from
+their own runs (abandoned runs don't count):
+
+| Badge               | How to earn it                                                                        |
+| ------------------- | ------------------------------------------------------------------------------------- |
+| **All A10**         | Win on ascension 10 with every character.                                             |
+| **Rotating Streak** | Win on ascension 10 with every character in a row, each one once. Any loss or lower-ascension run in between restarts the streak, and so does a second win with a character already in it (the streak then carries on from just after that character's earlier win). |
+| **Speedrunner**     | Win a run in under 20 minutes, on any ascension.                                      |
+
+"Every character" means every character anyone has played on the site, so a new character joins the requirement as
+soon as someone imports a run with it. The rules are in `lib/achievements.js`.
+
 ## What it does
 
 - **Imports selected `.run` files** from a folder in small batches. Repeated imports are safe.

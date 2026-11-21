@@ -8,6 +8,7 @@ const state = {
   tab: "characters",
   me: null, // signed-in profile {id, username} or null
   view: { scope: "global", profile: null }, // whose runs are shown
+  page: "stats", // "stats" or "achievements" (the signed-in player's badges)
   characters: [], // character ids available in the current view
   accountMode: "login",
   importing: false,
@@ -404,6 +405,7 @@ function viewToken() {
 }
 
 function writeHash() {
+  if (state.page === "achievements") return history.replaceState(null, "", "#view=achievements");
   const params = new URLSearchParams({ tab: state.tab, view: viewToken(), ...activeFilters() });
   if (trendsState.mode === "split") params.set("trend", "split");
   history.replaceState(null, "", `#${params}`);
@@ -423,6 +425,8 @@ function readHash() {
     };
   } else if (view === "me") {
     initial.view = { scope: "me" };
+  } else if (view === "achievements") {
+    initial.page = "achievements";
   }
   for (const key of Object.keys(FILTER_INPUTS)) {
     if (params.get(key)) initial.filters[key] = params.get(key);
@@ -957,11 +961,16 @@ function renderTabs() {
 function renderScope() {
   const { scope, profile } = state.view;
   const viewingOther = scope === "profile" && profile && profile.id !== state.me?.id;
-  const viewingMe = scope === "profile" && !viewingOther;
+  const onAchievements = state.page === "achievements";
+  const viewingMe = scope === "profile" && !viewingOther && !onAchievements;
 
-  $("globalScope").setAttribute("aria-pressed", String(scope === "global"));
+  $("globalScope").setAttribute("aria-pressed", String(scope === "global" && !onAchievements));
   $("profileScope").hidden = !state.me;
   $("profileScope").setAttribute("aria-pressed", String(viewingMe));
+  $("achievementsScope").hidden = !state.me;
+  $("achievementsScope").setAttribute("aria-pressed", String(onAchievements));
+  $("statsPage").hidden = onAchievements;
+  $("achievementsPage").hidden = !onAchievements;
   $("otherScope").hidden = !viewingOther;
   if (viewingOther) $("otherScope").textContent = `${profile.username} ✕`;
   $("otherScope").title = "Back to everyone";
@@ -975,6 +984,7 @@ function renderScope() {
 }
 
 function setView(target, profile) {
+  state.page = "stats";
   if (target === "global") state.view = { scope: "global", profile: null };
   else if (target === "me" && state.me)
     state.view = { scope: "profile", profile: state.me };
@@ -1040,6 +1050,90 @@ const searchPlayers = debounce(async () => {
     setStatus(error.message, "warn");
   }
 }, 250);
+
+// ---------- personal achievements ----------
+// A page of its own (it replaces the filters, cards and tabs) for the signed-in player's badges.
+// The server decides what is earned (lib/achievements.js).
+// SVG_NS comes from trends.js, which loads first.
+function svgIcon(...shapes) {
+  const svg = document.createElementNS(SVG_NS, "svg");
+  svg.setAttribute("viewBox", "0 0 48 48");
+  svg.setAttribute("aria-hidden", "true");
+  for (const [tag, attrs] of shapes) {
+    const shape = document.createElementNS(SVG_NS, tag);
+    for (const [key, value] of Object.entries(attrs)) shape.setAttribute(key, value);
+    svg.append(shape);
+  }
+  return svg;
+}
+const STROKE = { fill: "none", stroke: "currentColor", "stroke-width": 3.5, "stroke-linecap": "round", "stroke-linejoin": "round" };
+const BADGE_ICONS = {
+  all_a10: () =>
+    el("img", { src: `img/ascension/${ASCENSION_MAX}.png`, alt: "", width: ASCENSION_SIZE[0] * 1.4, height: ASCENSION_SIZE[1] * 1.4 }),
+  // Two arrows chasing each other round a circle.
+  rotating_streak: () =>
+    svgIcon(
+      ["path", { ...STROKE, d: "M38 18a15 15 0 0 0-26-3" }],
+      ["path", { ...STROKE, d: "M10 30a15 15 0 0 0 26 3" }],
+      ["path", { ...STROKE, d: "M12 7v8h8" }],
+      ["path", { ...STROKE, d: "M36 41v-8h-8" }],
+    ),
+  // A stopwatch.
+  speedrunner: () =>
+    svgIcon(
+      ["circle", { ...STROKE, cx: 24, cy: 27, r: 15 }],
+      ["path", { ...STROKE, d: "M20 6h8M24 6v6M24 27l6-6M37 13l3-3" }],
+    ),
+};
+
+function badgeCard(badge, allCharacters) {
+  const done = new Set(badge.characters);
+  const card = el(
+    "article",
+    { class: `badge ${badge.earned ? "earned" : "locked"}` },
+    el("div", { class: "badge-medal" }, BADGE_ICONS[badge.id]?.() || null),
+    el("h3", { text: badge.name }),
+    el("p", { class: "badge-desc", text: badge.description }),
+    el("p", { class: "badge-status", text: badge.earned ? `Earned · ${badge.progress}` : badge.progress }),
+  );
+  if (badge.id !== "speedrunner" && allCharacters.length) {
+    card.append(
+      el(
+        "div",
+        { class: "badge-chars" },
+        ...sortCharacters(allCharacters).map((c) => {
+          const logo = characterLogo(c, 0.6) || el("span", { text: pretty(c) });
+          const wrap = el("span", { class: done.has(c) ? "have" : "missing", title: `${pretty(c)}${done.has(c) ? "" : " (not yet)"}` }, logo);
+          return wrap;
+        }),
+      ),
+    );
+  }
+  return card;
+}
+
+async function showAchievements() {
+  if (!state.me) return setView("global");
+  state.page = "achievements";
+  state.loadId++; // drop any stats still loading
+  renderScope();
+  writeHash();
+  const page = $("achievementsPage");
+  page.replaceChildren(el("div", { class: "empty", text: "Loading achievements..." }));
+  try {
+    const data = await api("/api/achievements?scope=profile");
+    if (state.page !== "achievements") return;
+    const earned = data.badges.filter((b) => b.earned).length;
+    updateStatus().catch(() => {});
+    page.replaceChildren(
+      el("h2", { class: "achievements-title", text: `${data.profile.username}'s achievements` }),
+      el("p", { class: "hint", text: `${earned} of ${data.badges.length} earned. Abandoned runs don't count.` }),
+      el("div", { class: "badges" }, ...data.badges.map((badge) => badgeCard(badge, data.characters))),
+    );
+  } catch (error) {
+    page.replaceChildren(el("div", { class: "err", text: error.message }));
+  }
+}
 
 // ---------- account ----------
 function setAccountMode(mode) {
@@ -1197,6 +1291,7 @@ function resetFilters() {
 function wireEvents() {
   $("globalScope").addEventListener("click", () => setView("global"));
   $("profileScope").addEventListener("click", () => setView("me"));
+  $("achievementsScope").addEventListener("click", showAchievements);
   $("otherScope").addEventListener("click", () => setView("global"));
   $("signInButton").addEventListener("click", () => openAccountPanel("login"));
   $("createProfileButton").addEventListener("click", () =>
@@ -1315,6 +1410,11 @@ async function main() {
   for (const [name, value] of Object.entries(initial.filters)) $(FILTER_INPUTS[name]).value = value;
   if (!$("fMin").value) $("fMin").value = 1;
   if (initial.filters.character) renderCharacterPicker();
+  if (initial.page === "achievements" && state.me) {
+    // The stats underneath load when the player goes back (through setView).
+    state.view = { scope: "profile", profile: state.me };
+    return showAchievements();
+  }
   await refresh({ withFilters: !filtersLoaded });
 }
 

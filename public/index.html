@@ -7,7 +7,7 @@
       name="description"
       content="Solo run statistics for Slay the Spire 2." />
     <title>STS2 Tracker</title>
-    <link rel="stylesheet" href="style.css?v=8" />
+    <link rel="stylesheet" href="style.css?v=9" />
     <script src="analytics.js"></script>
   </head>
   <body>
@@ -71,6 +71,9 @@
           <button id="profileScope" type="button" aria-pressed="false" hidden>
             My profile
           </button>
+          <button id="achievementsScope" type="button" aria-pressed="false" hidden>
+            Personal achievements
+          </button>
           <button
             id="otherScope"
             type="button"
@@ -89,6 +92,8 @@
           <ul id="profileResults" class="results" hidden></ul>
         </div>
       </section>
+
+      <div id="statsPage">
 
       <div class="controls">
         <div class="char-filter">
@@ -117,6 +122,8 @@
       </p>
       <nav id="tabs" aria-label="Statistics"></nav>
       <div id="view" aria-live="polite"></div>
+      </div>
+      <section id="achievementsPage" aria-live="polite" hidden></section>
     </main>
 
     <footer class="site-footer hint">
@@ -129,6 +136,6 @@
       Drop your .run files to import
     </div>
     <script src="trends.js?v=3"></script>
-    <script src="app.js?v=14"></script>
+    <script src="app.js?v=15"></script>
   </body>
 </html>

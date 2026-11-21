@@ -8,6 +8,7 @@ const { createHandler } = require("../lib/handler");
 const { createRateLimiter } = require("../lib/ratelimit");
 const { buildTrends } = require("../public/trends");
 const { TABS, runQuery } = require("../db/queries");
+const { computeAchievements } = require("../lib/achievements");
 
 function makeRun({
   seed,
@@ -764,6 +765,51 @@ async function main() {
   );
   await limiter.reset("unit");
   await limiter.hit("unit", 2, 60000);
+
+  // Personal achievements.
+  {
+    const chars = ["CHARACTER.IRONCLAD", "CHARACTER.SILENT", "CHARACTER.DEFECT"];
+    const run = (character, ascension, win, run_time = 1800) => ({ character, ascension, win, run_time });
+    const byId = (runs) => Object.fromEntries(computeAchievements(runs, chars).map((b) => [b.id, b]));
+    // Every character beaten on A10, but a loss and a lower ascension win break the streak.
+    let badges = byId([
+      run(chars[0], 10, 1), run(chars[1], 10, 1), run(chars[2], 10, 0),
+      run(chars[2], 10, 1), run(chars[0], 9, 1), run(chars[1], 10, 1), run(chars[0], 10, 1, 1200),
+    ]);
+    assert.strictEqual(badges.all_a10.earned, true);
+    assert.strictEqual(badges.rotating_streak.earned, false);
+    assert.strictEqual(badges.rotating_streak.characters.length, 2);
+    assert.strictEqual(badges.speedrunner.earned, false, "exactly 20:00 is not under 20 minutes");
+    assert.strictEqual(badges.speedrunner.progress, "Fastest win: 20:00");
+    // A repeated character inside the streak doesn't count twice: I, S, I, D is at best S, I, D.
+    badges = byId([run(chars[0], 10, 1), run(chars[1], 10, 1), run(chars[0], 10, 1), run(chars[2], 10, 1)]);
+    assert.strictEqual(badges.rotating_streak.earned, true);
+    // I, I, S is only two different characters in a row (the second Ironclad restarts it).
+    badges = byId([run(chars[0], 10, 1), run(chars[0], 10, 1), run(chars[1], 10, 1)]);
+    assert.strictEqual(badges.rotating_streak.earned, false);
+    assert.strictEqual(badges.rotating_streak.characters.length, 2);
+    // S, I, S, I never holds all three, however long the streak.
+    badges = byId([run(chars[1], 10, 1), run(chars[0], 10, 1), run(chars[1], 10, 1), run(chars[0], 10, 1)]);
+    assert.strictEqual(badges.rotating_streak.earned, false);
+    // Three different characters back to back, and a fast win on a low ascension.
+    badges = byId([
+      run(chars[0], 3, 1, 1199), run(chars[2], 10, 1), run(chars[0], 10, 1), run(chars[1], 10, 1),
+    ]);
+    assert.strictEqual(badges.rotating_streak.earned, true);
+    assert.strictEqual(badges.speedrunner.earned, true);
+    // No runs, or a fast loss, earns nothing.
+    badges = byId([run(chars[0], 10, 0, 300)]);
+    assert.ok(Object.values(badges).every((b) => !b.earned));
+    assert.strictEqual(badges.speedrunner.progress, "No wins yet");
+    // The endpoint needs a signed-in player (or a profile id) and returns every character in the database.
+    assert.strictEqual((await dispatch(handler, "/api/achievements?scope=profile")).status, 401);
+    const mine = await dispatch(handler, "/api/achievements?scope=profile", "GET", undefined, undefined, aliceCookie);
+    assert.strictEqual(mine.status, 200);
+    const body = JSON.parse(mine.body);
+    assert.deepStrictEqual(body.badges.map((b) => b.name), ["All A10", "Rotating Streak", "Speedrunner"]);
+    assert.ok(body.characters.length >= 1);
+    assert.strictEqual((await dispatch(handler, "/api/achievements")).status, 400);
+  }
 
   // Account creation is limited per network address.
   let lastStatus;

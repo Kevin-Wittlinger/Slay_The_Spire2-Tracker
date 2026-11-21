@@ -776,3 +776,84 @@ td.result-loss {
     transition: none !important;
   }
 }
+
+/* ---------- personal achievements ---------- */
+.achievements-title {
+  margin: 4px 0 2px;
+  font-size: 20px;
+}
+.badges {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: 14px;
+  margin-top: 14px;
+}
+.badge {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  gap: 6px;
+  padding: 22px 18px 18px;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+}
+.badge h3 {
+  margin: 6px 0 0;
+  font-size: 17px;
+}
+.badge p {
+  margin: 0;
+}
+.badge-desc {
+  color: var(--dim);
+  font-size: 13px;
+}
+.badge-status {
+  font-size: 13px;
+  font-weight: 600;
+}
+.badge-medal {
+  display: grid;
+  place-items: center;
+  width: 84px;
+  height: 84px;
+  border-radius: 50%;
+  border: 3px solid var(--line);
+  background: var(--panel-2);
+  color: var(--dim);
+}
+.badge-medal svg {
+  width: 46px;
+  height: 46px;
+}
+.badge.earned {
+  border-color: var(--accent);
+}
+.badge.earned .badge-medal {
+  border-color: var(--accent);
+  color: var(--accent);
+  box-shadow: 0 0 18px rgb(224 176 74 / 0.35);
+}
+.badge.earned .badge-status {
+  color: var(--accent);
+}
+.badge.locked .badge-medal > * {
+  filter: grayscale(1);
+  opacity: 0.45;
+}
+.badge.locked .badge-status {
+  color: var(--dim);
+}
+.badge-chars {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 6px 10px;
+  margin-top: 6px;
+}
+.badge-chars .missing {
+  filter: grayscale(1);
+  opacity: 0.35;
+}
