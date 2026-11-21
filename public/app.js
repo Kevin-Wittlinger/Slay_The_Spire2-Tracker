@@ -236,7 +236,32 @@ function parseTeammate(raw) {
   };
 }
 
-const teammateName = (mate) => mate.profile?.username || `Steam …${mate.steam.slice(-4)}`;
+// Steam display names fetched from the server (see lib/steam.js), by Steam id.
+const steamNames = new Map();
+const teammateName = (mate) =>
+  mate.profile?.username || steamNames.get(mate.steam) || `Steam …${mate.steam.slice(-4)}`;
+
+// Looks up the Steam names of teammates without a site profile, before a table that shows them is
+// drawn. Best effort: on any failure the shortened Steam id is shown instead.
+async function loadSteamNames(rows) {
+  const ids = new Set();
+  for (const row of rows) {
+    for (const col of TEAMMATE_COLUMNS) {
+      if (typeof row[col] !== "string") continue;
+      for (const part of row[col].split(";")) {
+        const mate = parseTeammate(part);
+        if (!mate.profile && mate.steam && !steamNames.has(mate.steam)) ids.add(mate.steam);
+      }
+    }
+  }
+  if (!ids.size) return;
+  try {
+    const found = await api(`/api/steam-names?ids=${[...ids].slice(0, 25).join(",")}`);
+    for (const [id, name] of Object.entries(found)) steamNames.set(id, name);
+  } catch {
+    /* names are optional */
+  }
+}
 const teammateWinPct = (mate) => (mate.runs ? Math.round((1000 * mate.wins) / mate.runs) / 10 : null);
 // Plain text for searching and sorting: "alice (Silent, 50% of 2)".
 function teammateText(mate) {
@@ -933,6 +958,7 @@ async function renderView(loadId) {
     // Solo runs have no teammates, so an all-solo table leaves that column out.
     if (shown.length && "teammates" in shown[0] && shown.every((row) => !row.teammates))
       shown = shown.map(({ teammates, ...row }) => row);
+    if (tab?.kind !== "trends") await loadSteamNames(shown);
     if (loadId !== state.loadId) return;
     if (tab?.kind === "trends") renderTrends(rows, host, { character, allRows });
     else renderTable(shown, host);

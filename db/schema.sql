@@ -90,6 +90,13 @@ CREATE TABLE IF NOT EXISTS run_players (
   PRIMARY KEY (run_id, slot)
 );
 
+-- Steam display names of teammates, looked up by lib/steam.js and refreshed weekly.
+CREATE TABLE IF NOT EXISTS steam_names (
+  steam_id   TEXT PRIMARY KEY,
+  name       TEXT,                   -- NULL = Steam gave no name
+  fetched_at INTEGER NOT NULL        -- ms since epoch
+);
+
 -- Every combat. died = 1 when HP reached 0 in that room.
 CREATE TABLE IF NOT EXISTS fights (
   run_id       TEXT NOT NULL REFERENCES runs(run_id) ON DELETE CASCADE,

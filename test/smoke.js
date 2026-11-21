@@ -888,6 +888,30 @@ async function main() {
     });
     assert.match((await stat("teammates"))[0].teammate, new RegExp(`^${MATE}\\|\\d+\\|mate$`));
     assert.strictEqual((await mpDb.execute("SELECT steam_id FROM profiles WHERE username = 'duo'")).rows[0].steam_id, ME);
+    // Steam names: looked up once, kept in the database, and only for ids that appear in run_players.
+    {
+      const realFetch = global.fetch;
+      const asked = [];
+      global.fetch = async (url) => {
+        asked.push(String(url));
+        const id = String(url).match(/profiles\/(\d+)/)?.[1];
+        return { ok: true, text: async () => `<profile><steamID><![CDATA[Team Mate ${id.slice(-2)}]]></steamID></profile>` };
+      };
+      try {
+        const names = async (ids) => JSON.parse((await dispatch(mpApi, `/api/steam-names?ids=${ids}`)).body);
+        assert.deepStrictEqual(await names(`${OTHER},76561198999999999,abc`), { [OTHER]: "Team Mate 03" });
+        assert.strictEqual(asked.length, 1); // the stranger and the junk id were never looked up
+        assert.deepStrictEqual(await names(OTHER), { [OTHER]: "Team Mate 03" });
+        assert.strictEqual(asked.length, 1); // second time comes from the database
+        global.fetch = async () => {
+          throw new Error("offline");
+        };
+        await mpDb.execute({ sql: "UPDATE steam_names SET fetched_at = 0 WHERE steam_id = ?", args: [OTHER] });
+        assert.deepStrictEqual(await names(OTHER), { [OTHER]: "Team Mate 03" }); // keeps the old name when Steam is down
+      } finally {
+        global.fetch = realFetch;
+      }
+    }
     await mpDb.close();
   }
 
