@@ -58,7 +58,10 @@ also needs its two images (`img/characters/<name>.png` and `img/heads/<name>.png
 
 - **Imports selected `.run` files** from a folder in small batches. Repeated imports are safe.
 - **Stores cloud data in Turso** so imported runs remain available between Vercel function calls.
-- **Solo and multiplayer.** The **Mode** filter shows solo runs (the default), multiplayer runs, or both. A
+- **Solo and multiplayer.** When viewing a profile, the **Mode** filter shows solo runs (the default), multiplayer
+  runs, or both, and the **Teammates** tab is available. The combined **Everyone** view is always solo runs only, with
+  no Mode filter or Teammates tab: each teammate who imports a co-op run stores their own side of it, so combining
+  them would count the run once per teammate. A
   multiplayer run is stored from the uploader's side (their character, deck, relics, card picks and fights), so
   multiplayer-only cards (tagged "Co-op") show up in the card tables. **Recent runs** lists who you played with and
   your win rate with each of them, and the **Teammates** tab sums it up per teammate. Run files only hold Steam ids,

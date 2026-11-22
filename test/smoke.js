@@ -968,7 +968,16 @@ async function main() {
     const myDamage = await mpDb.execute({ sql: "SELECT DISTINCT damage FROM fights WHERE run_id = ?", args: [row.run_id] });
     assert.deepStrictEqual(myDamage.rows.map((r) => Number(r.damage)), [9]);
 
-    const stat = async (path) => JSON.parse((await dispatch(mpApi, `/api/stats/${path}`)).body);
+    // Multiplayer stats belong to a profile; the combined Everyone view is always solo, without teammates.
+    const duoId = JSON.parse(register.body).profile.id;
+    const everyone = async (path) => JSON.parse((await dispatch(mpApi, `/api/stats/${path}`)).body);
+    assert.strictEqual((await everyone("overview?mode=multi"))[0].runs, 1, "Everyone ignores Mode");
+    assert.strictEqual((await everyone("overview?mode=all"))[0].runs, 1);
+    assert.deepStrictEqual(await everyone("teammates"), []);
+    const stat = async (path) =>
+      JSON.parse(
+        (await dispatch(mpApi, `/api/stats/${path}${path.includes("?") ? "&" : "?"}scope=profile&profileId=${duoId}`)).body,
+      );
     assert.strictEqual((await stat("overview"))[0].runs, 1); // solo is the default
     assert.strictEqual((await stat("overview?mode=multi"))[0].runs, 3);
     assert.strictEqual((await stat("overview?mode=all"))[0].runs, 4);

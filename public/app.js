@@ -482,6 +482,12 @@ const FILTER_INPUTS = {
   min: "fMin",
 };
 
+// Multiplayer is per player: each teammate who imports a co-op run stores their own side of it, so
+// the combined Everyone view would count it once per teammate, and "teammates" only means something for
+// one player. The Mode filter and Teammates tab therefore only exist while viewing a profile.
+const MULTIPLAYER_TABS = new Set(["teammates"]);
+const multiplayerAllowed = () => state.view.scope === "profile";
+
 // The filters that apply right now, empty ones left out.
 // allCharacters: leave the character out (the Trends play-rate chart always compares them).
 function activeFilters({ allCharacters = false } = {}) {
@@ -491,6 +497,8 @@ function activeFilters({ allCharacters = false } = {}) {
     if (!value) continue;
     if (name === "character" && allCharacters) continue;
     if (name === "source" && state.tab !== "relic_win_rate") continue;
+    // Everyone is always solo runs; the dropdown keeps its value for when a profile is viewed again.
+    if (name === "mode" && !multiplayerAllowed()) continue;
     if (name === "min" && !(Number(value) > 1)) continue;
     active[name] = value;
   }
@@ -878,7 +886,7 @@ function renderTable(rows, host) {
 async function renderOverview(loadId) {
   const [o] = await api(`/api/stats/overview?${statsQuery()}`);
   if (loadId !== state.loadId) return;
-  const runsLabel = { multi: "Multiplayer runs", all: "Solo + multiplayer runs" }[$("fMode").value] || "Solo runs";
+  const runsLabel = { multi: "Multiplayer runs", all: "Solo + multiplayer runs" }[activeFilters().mode] || "Solo runs";
   const items = [
     [runsLabel, nf.format(o.runs)],
     ["Wins", nf.format(o.wins)],
@@ -1068,8 +1076,9 @@ function relicSourceSelect() {
 }
 
 function renderTabs() {
+  const tabs = state.tabs.filter((tab) => multiplayerAllowed() || !MULTIPLAYER_TABS.has(tab.id));
   $("tabs").replaceChildren(
-    ...state.tabs.map((tab) =>
+    ...tabs.map((tab) =>
       el("button", {
         type: "button",
         class: tab.id === state.tab ? "on" : "",
@@ -1105,6 +1114,15 @@ function renderScope() {
   $("otherScope").hidden = !viewingOther;
   if (viewingOther) $("otherScope").textContent = `${profile.username} ✕`;
   $("otherScope").title = "Back to everyone";
+
+  // Mode filter and Teammates tab only on a profile. Leaving the Teammates tab for Everyone goes to
+  // the first tab instead.
+  $("modeFilter").hidden = !multiplayerAllowed();
+  if (!multiplayerAllowed() && MULTIPLAYER_TABS.has(state.tab)) {
+    state.tab = state.tabs.find((tab) => !MULTIPLAYER_TABS.has(tab.id))?.id;
+    tableMemory = null;
+  }
+  if (state.tabs.length) renderTabs();
 
   $("signInButton").hidden = Boolean(state.me);
   $("createProfileButton").hidden = Boolean(state.me);

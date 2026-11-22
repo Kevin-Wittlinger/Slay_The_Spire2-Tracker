@@ -139,7 +139,8 @@
           <div id="charPicker"></div>
           <input id="fChar" type="hidden" value="" />
         </div>
-        <label title="Solo runs, multiplayer (co-op) runs, or both. A multiplayer run counts your own character, deck, relics and fights."
+        <!-- Only shown on a profile: Everyone is always solo runs (see renderScope in app.js). -->
+        <label id="modeFilter" title="Solo runs, multiplayer (co-op) runs, or both. A multiplayer run counts your own character, deck, relics and fights."
           >Mode
           <select id="fMode">
             <option value="">Solo</option>
@@ -184,6 +185,6 @@
     </div>
     <script src="game-data.js?v=1"></script>
     <script src="trends.js?v=4"></script>
-    <script src="app.js?v=20"></script>
+    <script src="app.js?v=21"></script>
   </body>
 </html>
