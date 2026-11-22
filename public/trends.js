@@ -8,14 +8,12 @@
 
 const TRENDS_RECENT = 50; // runs shown in the bottom chart
 const TRENDS_FORM = 10; // runs in each point of the bottom chart
-const TRENDS_COLORS = {
-  ironclad: "#ef6b6b",
-  silent: "#8be04a",
-  regent: "#f2ab3c",
-  necrobinder: "#e08fec",
-  defect: "#7cc4ea",
-  fool: "#e9ecf2",
-};
+// Line colour per character, from game-data.js (a global on the page; required when tested in Node).
+const TRENDS_GAME =
+  typeof module !== "undefined" ? require("./game-data") : { GAME_DATA, characterSlug };
+const TRENDS_COLORS = Object.fromEntries(
+  TRENDS_GAME.GAME_DATA.characters.map((c) => [TRENDS_GAME.characterSlug(c.id), c.color]),
+);
 const TRENDS_SPARE_COLORS = ["#9aa7ff", "#ffb38a", "#7fe0c2", "#e3d36b"];
 const COLOR_ALL = "#e0b04a";
 
@@ -79,7 +77,7 @@ function buildTrends(rows, formWindow = TRENDS_FORM) {
 
 function trendsColor(character, index) {
   const slug =
-    typeof characterSlug === "function" ? characterSlug(character) : "";
+    TRENDS_GAME.characterSlug(character);
   return (
     TRENDS_COLORS[slug] ||
     TRENDS_SPARE_COLORS[index % TRENDS_SPARE_COLORS.length]
@@ -311,7 +309,7 @@ function drawChart(data, config, width) {
 
 // Character head icon (public/img/heads/<name>.png), or the name when there is none.
 function characterHead(character) {
-  const slug = typeof characterSlug === "function" ? characterSlug(character) : "";
+  const slug = TRENDS_GAME.characterSlug(character);
   if (!/^[a-z]+$/.test(slug) || !TRENDS_COLORS[slug]) return pretty(character);
   return el("img", {
     class: "playrate-head",

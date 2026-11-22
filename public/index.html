@@ -7,7 +7,7 @@
       name="description"
       content="Solo and multiplayer run statistics for Slay the Spire 2." />
     <title>STS2 Tracker</title>
-    <link rel="stylesheet" href="style.css?v=10" />
+    <link rel="stylesheet" href="style.css?v=12" />
     <script src="analytics.js"></script>
   </head>
   <body>
@@ -30,6 +30,7 @@
       <button id="createProfileButton" type="button" class="primary">
         Create profile
       </button>
+      <button id="settingsButton" type="button" hidden>Account</button>
       <button id="signOutButton" type="button" hidden>Sign out</button>
     </header>
 
@@ -60,6 +61,43 @@
         <button id="accountClose" type="button" class="link">Cancel</button>
         <span id="accountMessage" class="hint" role="alert"></span>
       </form>
+    </section>
+
+    <section id="settingsPanel" class="account-panel" hidden>
+      <div class="settings-forms">
+        <form id="passwordForm" class="settings-form">
+          <strong>Change password</strong>
+          <!-- Lets password managers tie the new password to this account. -->
+          <input id="passwordUsername" autocomplete="username" hidden />
+          <label
+            >Current password
+            <input id="currentPassword" type="password" autocomplete="current-password" required
+          /></label>
+          <label
+            >New password
+            <input id="newPassword" type="password" autocomplete="new-password" minlength="5" maxlength="128" required
+          /></label>
+          <button type="submit" class="primary">Change password</button>
+          <span id="passwordMessage" class="hint" role="alert"></span>
+        </form>
+        <form id="deleteForm" class="settings-form danger">
+          <strong>Delete account</strong>
+          <p class="hint">
+            Removes your profile and every run that only you imported. Runs another player also
+            imported stay in their stats. This can't be undone.
+          </p>
+          <label
+            >Password
+            <input id="deletePassword" type="password" autocomplete="current-password" required
+          /></label>
+          <label class="check"
+            ><input id="deleteConfirm" type="checkbox" required /> I understand my runs will be deleted</label
+          >
+          <button type="submit" class="danger-btn">Delete my account</button>
+          <span id="deleteMessage" class="hint" role="alert"></span>
+        </form>
+      </div>
+      <button id="settingsClose" type="button" class="link">Close</button>
     </section>
 
     <main>
@@ -144,7 +182,8 @@
     <div id="dropOverlay" class="drop-overlay" hidden>
       Drop your .run files to import
     </div>
-    <script src="trends.js?v=3"></script>
-    <script src="app.js?v=18"></script>
+    <script src="game-data.js?v=1"></script>
+    <script src="trends.js?v=4"></script>
+    <script src="app.js?v=20"></script>
   </body>
 </html>

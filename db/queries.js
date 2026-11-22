@@ -26,6 +26,23 @@ const BASE = `r.abandoned = 0 AND ${FILTER} AND ${PROFILE_FILTER}`;
 
 // Every character begins with one of these, so they say nothing about a run. Left out of relic stats.
 const { STARTING_RELIC_LIST } = require("../lib/relics");
+const { GAME_DATA } = require("../public/game-data");
+
+// Game ids are [A-Z_] only (checked here), so they are safe to write into the SQL below.
+const sqlId = (id) => {
+  if (!/^[A-Z0-9_]+$/.test(id)) throw new Error(`Bad game data id: ${id}`);
+  return id;
+};
+// Characters in game-data.js order; ones the site doesn't know yet come last.
+const CHARACTER_ORDER = `CASE
+${GAME_DATA.characters.map((c, i) => `  WHEN r.character LIKE '%${sqlId(c.id)}' THEN ${i + 1}`).join("\n")}
+  ELSE ${GAME_DATA.characters.length + 1}
+END`;
+// OVERGROWTH -> Overgrowth (unknown areas keep their id).
+const AREA_NAME = (column) => `CASE ${column}
+${GAME_DATA.areas.map((a) => `  WHEN '${sqlId(a.id)}' THEN '${a.name.replace(/'/g, "''")}'`).join("\n")}
+  ELSE ${column}
+END`;
 
 // "profile_id|username" of the site profile that owns a Steam id, or "|" when no one does.
 const SITE_PROFILE = (steamRef) => `COALESCE((
@@ -59,15 +76,7 @@ const TABS = {
       WHERE ${BASE}
       GROUP BY r.character
       HAVING runs >= @min
-      ORDER BY CASE
-                 WHEN r.character LIKE '%IRONCLAD' THEN 1
-                 WHEN r.character LIKE '%SILENT' THEN 2
-                 WHEN r.character LIKE '%REGENT' THEN 3
-                 WHEN r.character LIKE '%NECROBINDER' THEN 4
-                 WHEN r.character LIKE '%DEFECT' THEN 5
-                 WHEN r.character LIKE '%FOOL' THEN 6
-                 ELSE 7
-               END, runs DESC`,
+      ORDER BY ${CHARACTER_ORDER}, runs DESC`,
   },
 
   ascensions: {
@@ -149,13 +158,7 @@ const TABS = {
     // entering the next act, or by winning (the last act has no next one). So Overgrowth and
     // Underdocks (both act 1) each lead on to Hive, and the route a run took doesn't matter.
     sql: `
-      SELECT CASE t.area
-               WHEN 'OVERGROWTH' THEN 'Overgrowth'
-               WHEN 'UNDERDOCKS' THEN 'Underdocks'
-               WHEN 'HIVE' THEN 'Hive'
-               WHEN 'GLORY' THEN 'Glory'
-               ELSE t.area
-             END AS area,
+      SELECT ${AREA_NAME("t.area")} AS area,
              COUNT(*) AS entered,
              SUM(cleared) AS cleared,
              COUNT(*) - SUM(cleared) AS failed,

@@ -33,15 +33,10 @@ const COLUMN_LABELS = {
   last_played: "Last played",
 };
 
+// Game content (characters, areas, Ancients, co-op cards...) lives in game-data.js, loaded before this file.
+
 // Cards that only exist in multiplayer (they help or target a teammate). Shown with a "Co-op" tag.
-const COOP_CARDS = new Set(
-  [
-    "BEACON_OF_HOPE", "BELIEVE_IN_YOU", "COORDINATE", "DEMONIC_SHIELD", "ENERGY_SURGE",
-    "FLANKING", "GANG_UP", "GLIMPSE_BEYOND", "HAMMER_TIME", "HUDDLE_UP", "IGNITION",
-    "INTERCEPT", "KNOCKDOWN", "LARGESSE", "LEGION_OF_BONE", "LIFT", "MIMIC", "RALLY",
-    "SNEAKY", "TAG_TEAM", "TANK",
-  ].map((id) => `CARD.${id}`),
-);
+const COOP_CARDS = new Set(GAME_DATA.coopCards.map((id) => `CARD.${id}`));
 
 // Tabs whose default order is alphabetical, and the column they sort by.
 const ALPHABETICAL_TABS = {
@@ -58,21 +53,14 @@ const ALPHABETICAL_TABS = {
 // are left to the search box, where a dropdown with hundreds of entries would just repeat it.
 const FILTERABLE = new Set(["ascension", "type", "result", "source", "rarity", "color"]);
 
-// Logo banners in public/img/characters, as [width, height] in CSS pixels.
-// The images are trimmed and scaled so the lettering is the same size in every logo;
-// to add a character, drop in a PNG prepared the same way and add its size here.
-const CHARACTER_LOGOS = {
-  defect: [126, 26],
-  fool: [97, 20],
-  ironclad: [130, 20],
-  necrobinder: [177, 27],
-  regent: [124, 30],
-  silent: [121, 23],
-};
+// Logo banners in public/img/characters, as [width, height] in CSS pixels (see game-data.js).
+const CHARACTER_LOGOS = Object.fromEntries(
+  GAME_DATA.characters.map((c) => [characterSlug(c.id), c.logo]),
+);
 
-// Flame icons for ascension levels 0-10 (public/img/ascension/<level>.png, 31x46 source),
+// Flame icons for ascension levels 0 to the max (public/img/ascension/<level>.png, 31x46 source),
 // drawn at [width, height] CSS pixels. Other levels fall back to plain text.
-const ASCENSION_MAX = 10;
+const ASCENSION_MAX = GAME_DATA.maxAscension;
 const ASCENSION_SIZE = [23, 34];
 
 // Fight-type icons (public/img/fights/<kind>.png) shown beside the text in "type" columns.
@@ -87,22 +75,9 @@ const FIGHT_ICONS = {
 // The filter-row logos are drawn smaller so all characters fit on one line.
 const PICKER_SCALE = 0.7;
 
-// Characters always appear in this order wherever they are listed.
-const CHARACTER_ORDER = [
-  "ironclad",
-  "silent",
-  "regent",
-  "necrobinder",
-  "defect",
-  "fool",
-];
-
-function characterSlug(value) {
-  return String(value)
-    .replace(/^CHARACTER./, "")
-    .replace(/^THE_/, "")
-    .toLowerCase();
-}
+// Characters always appear in game-data.js order wherever they are listed.
+// characterSlug() comes from game-data.js.
+const CHARACTER_ORDER = GAME_DATA.characters.map((c) => characterSlug(c.id));
 
 function characterRank(value) {
   const rank = CHARACTER_ORDER.indexOf(characterSlug(value));
@@ -254,14 +229,22 @@ async function loadSteamNames(rows) {
       }
     }
   }
-  if (!ids.size) return;
-  try {
-    const found = await api(`/api/steam-names?ids=${[...ids].slice(0, 25).join(",")}`);
-    for (const [id, name] of Object.entries(found)) steamNames.set(id, name);
-  } catch {
-    /* names are optional */
-  }
+  // The server answers at most 25 ids per request, so larger tables are asked about in batches.
+  const all = [...ids];
+  const batches = [];
+  for (let i = 0; i < all.length; i += STEAM_NAME_BATCH) batches.push(all.slice(i, i + STEAM_NAME_BATCH));
+  await Promise.all(
+    batches.map(async (batch) => {
+      try {
+        const found = await api(`/api/steam-names?ids=${batch.join(",")}`);
+        for (const [id, name] of Object.entries(found)) steamNames.set(id, name);
+      } catch {
+        /* names are optional */
+      }
+    }),
+  );
 }
+const STEAM_NAME_BATCH = 25; // matches MAX_IDS in lib/steam.js
 const teammateWinPct = (mate) => (mate.runs ? Math.round((1000 * mate.wins) / mate.runs) / 10 : null);
 // Plain text for searching and sorting: "alice (Silent, 50% of 2)".
 function teammateText(mate) {
@@ -984,14 +967,9 @@ function fillSelect(select, values, labelFor, allLabel) {
   select.value = values.map(String).includes(previous) ? previous : "";
 }
 
-// The game's areas in the order they are played. Overgrowth and Underdocks are the two
-// alternatives for act 1. The value is what the server stores in run_acts.area.
-const AREA_NAMES = {
-  OVERGROWTH: "Overgrowth",
-  UNDERDOCKS: "Underdocks",
-  HIVE: "Hive",
-  GLORY: "Glory",
-};
+// The game's areas in the order they are played (game-data.js). The key is what the server stores
+// in run_acts.area.
+const AREA_NAMES = Object.fromEntries(GAME_DATA.areas.map((a) => [a.id, a.name]));
 
 async function fillFilters() {
   fillSelect(
@@ -1060,7 +1038,7 @@ function refreshStats() {
 // Where a relic came from, as stored in run_relics.origin (see lib/relics.js). Only Relic WR uses it.
 // "All Ancients" is every act 2 and 3 Ancient; Neow is the act 1 one. (The server also understands
 // SHOP, ELITE, BOSS, TREASURE, EVENT, REST and OTHER; they just have no dropdown.)
-const ANCIENT_NAMES = ["Tezcatara", "Tanx", "Vakuu", "Orobas", "Darv", "Nonupeipe", "Pael"];
+const ANCIENT_NAMES = GAME_DATA.ancients;
 const RELIC_SOURCES = {
   NEOW: "Neow",
   ANCIENT: "All Ancients",
@@ -1131,6 +1109,7 @@ function renderScope() {
   $("signInButton").hidden = Boolean(state.me);
   $("createProfileButton").hidden = Boolean(state.me);
   $("signOutButton").hidden = !state.me;
+  $("settingsButton").hidden = !state.me;
   $("importRunButton").hidden = !state.me;
   $("runFiles").disabled = !state.me || state.importing;
   $("importRunButton").classList.toggle("disabled", state.importing);
@@ -1241,13 +1220,26 @@ const BADGE_ICONS = {
 
 function badgeCard(badge, allCharacters) {
   const done = new Set(badge.characters);
+  const earnedOn = badge.earnedAt ? ` on ${new Date(badge.earnedAt).toLocaleDateString()}` : "";
+  // Outdated: earned under an earlier requirement (before a new character was added). Still earned.
   const card = el(
     "article",
-    { class: `badge ${badge.earned ? "earned" : "locked"}` },
+    { class: `badge ${badge.earned ? "earned" : "locked"}${badge.outdated ? " outdated" : ""}` },
     el("div", { class: "badge-medal" }, BADGE_ICONS[badge.id]?.() || null),
-    el("h3", { text: badge.name }),
+    el(
+      "h3",
+      {},
+      badge.name,
+      badge.outdated
+        ? el("span", { class: "outdated-tag", text: "Outdated", title: badge.outdatedNote || "" })
+        : null,
+    ),
     el("p", { class: "badge-desc", text: badge.description }),
-    el("p", { class: "badge-status", text: badge.earned ? `Earned · ${badge.progress}` : badge.progress }),
+    el("p", {
+      class: "badge-status",
+      text: badge.earned ? `Earned${earnedOn} · ${badge.progress}` : badge.progress,
+    }),
+    badge.outdated ? el("p", { class: "badge-outdated", text: badge.outdatedNote }) : null,
   );
   if (badge.id !== "speedrunner" && allCharacters.length) {
     card.append(
@@ -1342,10 +1334,75 @@ async function signOut() {
   try {
     await api("/api/logout", { method: "POST" });
     state.me = null;
+    closeSettings();
     await setView("global");
   } catch (error) {
     setStatus(error.message, "warn");
   }
+}
+
+// ---------- account settings (change password, delete account) ----------
+function settingsMessage(id, text, kind = "") {
+  $(id).textContent = text;
+  $(id).className = `hint ${kind}`;
+}
+
+function openSettings() {
+  closeAccountPanel();
+  for (const id of ["passwordMessage", "deleteMessage"]) settingsMessage(id, "");
+  $("passwordUsername").value = state.me?.username || "";
+  $("settingsPanel").hidden = false;
+  $("currentPassword").focus();
+}
+
+function closeSettings() {
+  $("settingsPanel").hidden = true;
+  for (const id of ["currentPassword", "newPassword", "deletePassword"]) $(id).value = "";
+  $("deleteConfirm").checked = false;
+}
+
+// Runs one settings form's request, with its button disabled and errors shown under the form.
+async function submitSettings(event, messageId, work) {
+  event.preventDefault();
+  const button = event.target.querySelector("button[type=submit]");
+  button.disabled = true;
+  settingsMessage(messageId, "Working...");
+  try {
+    await work();
+  } catch (error) {
+    settingsMessage(messageId, error.message, "err");
+  } finally {
+    button.disabled = false;
+  }
+}
+
+function submitPassword(event) {
+  return submitSettings(event, "passwordMessage", async () => {
+    await api("/api/password", {
+      method: "POST",
+      body: JSON.stringify({
+        currentPassword: $("currentPassword").value,
+        newPassword: $("newPassword").value,
+      }),
+    });
+    $("currentPassword").value = "";
+    $("newPassword").value = "";
+    settingsMessage("passwordMessage", "Password changed. Your other devices have been signed out.", "ok");
+  });
+}
+
+function submitDelete(event) {
+  return submitSettings(event, "deleteMessage", async () => {
+    await api("/api/delete-account", {
+      method: "POST",
+      body: JSON.stringify({ password: $("deletePassword").value }),
+    });
+    state.me = null;
+    state.dataVersion = Date.now(); // skip cached statistics that still include the deleted runs
+    closeSettings();
+    await setView("global");
+    setStatus("Your account and its runs have been deleted.", "live");
+  });
 }
 
 // ---------- import ----------
@@ -1499,6 +1556,12 @@ function wireEvents() {
   $("accountClose").addEventListener("click", closeAccountPanel);
   $("accountForm").addEventListener("submit", submitAccount);
   $("signOutButton").addEventListener("click", signOut);
+  $("settingsButton").addEventListener("click", () =>
+    $("settingsPanel").hidden ? openSettings() : closeSettings(),
+  );
+  $("settingsClose").addEventListener("click", closeSettings);
+  $("passwordForm").addEventListener("submit", submitPassword);
+  $("deleteForm").addEventListener("submit", submitDelete);
 
   setupCardPreview();
   const onFilter = () => refreshStats();
@@ -1563,6 +1626,7 @@ function wireEvents() {
 
   document.addEventListener("keydown", (event) => {
     if (event.key === "Escape" && !$("accountPanel").hidden) closeAccountPanel();
+    if (event.key === "Escape" && !$("settingsPanel").hidden) closeSettings();
   });
 
   // Catch up after the tab has been in the background for a while.

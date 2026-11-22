@@ -18,8 +18,15 @@ Use the **Find a player** box to look up any profile and view their stats. Filte
 viewing are kept in the page URL, so a link can be shared or reloaded.
 
 Run files already in the global database can be re-uploaded after creating a profile to include them in that
-profile's stats. Passwords are stored as salted scrypt hashes, and sign-in uses an expiring secure cookie. There is
-currently no password-reset flow.
+profile's stats. Passwords are stored as salted scrypt hashes, and sign-in uses an expiring secure cookie.
+
+Signed-in players have an **Account** button with two options:
+
+- **Change password.** It needs the current password and signs out every other device.
+- **Delete account.** It needs the password, and removes the profile and every run that only that player imported.
+  Runs another player also imported stay in that player's stats.
+
+There is no password reset for a forgotten password, because the site doesn't store email addresses.
 
 ## Personal achievements
 
@@ -32,8 +39,20 @@ their own runs (abandoned runs don't count):
 | **Rotating Streak** | Win on ascension 10 with every character in a row, each one once. Any loss or lower-ascension run in between restarts the streak, and so does a second win with a character already in it (the streak then carries on from just after that character's earlier win). |
 | **Speedrunner**     | Win a run in under 20 minutes, on any ascension.                                      |
 
-"Every character" means every character anyone has played on the site, so a new character joins the requirement as
-soon as someone imports a run with it. The rules are in `lib/achievements.js`.
+"Every character" means every character listed in `public/game-data.js`, and "ascension 10" is its `maxAscension`.
+A new character joins the requirement when it is added there, not when someone imports a run with it, so one player's
+import can't take a badge away from everyone else. The rules are in `lib/achievements.js`.
+
+Earned badges are saved (`profile_badges`) with what they asked for at the time. If the requirement grows later, for
+example when a new character is added, players keep the badge, marked **Outdated** with a note saying what changed,
+until they earn it again under the new requirement.
+
+## Adding new game content
+
+Characters, areas, Ancients, co-op cards and the top ascension are listed once, in `public/game-data.js`. The page
+and the server both read that file. The top of the file says what to add for each kind of content. A new character
+also needs its two images (`img/characters/<name>.png` and `img/heads/<name>.png`). Bump the `?v=` numbers in
+`public/index.html` after changing it, so browsers load the new version.
 
 ## What it does
 
@@ -60,14 +79,36 @@ soon as someone imports a run with it. The rules are in `lib/achievements.js`.
 | `lib/importer.js`  | Parses one `.run` file into rows (solo or multiplayer)      |
 | `lib/multiplayer.js` | Steam ids, finding the uploader, multiplayer migrations   |
 | `lib/db.js`        | Opens local SQLite or remote Turso                          |
+| `lib/migrations.js` | Numbered database changes, each applied once (how to add one is at the top) |
+| `public/game-data.js` | Characters, areas, Ancients, co-op cards; shared by page and server |
 | `lib/handler.js`   | Profile auth and shared API routes                          |
 | `lib/ratelimit.js` | Database-backed rate limiter                                |
 | `api/index.js`     | Vercel Function entry point                                 |
 | `server.js`        | Local development server                                    |
 | `public/`          | The website (HTML, CSS, JS)                                 |
-| `test/smoke.js`    | `npm test`                                                  |
+| `scripts/db-health.js` | `npm run db:health`: table sizes and leftover data (see below) |
+| `test/smoke.js`    | `npm test`; also run by GitHub Actions on every push (`.github/workflows/test.yml`) |
 
 Locally, the database lives at `data/spire-ledger.db`. Production data is stored in Turso.
+
+## Database health and Turso usage
+
+`npm run db:health` prints the size of every table and looks for leftover data: rows of runs that no longer exist,
+links to missing runs or profiles, expired sign-ins and old rate-limit counters. It only reads unless you add
+`-- --fix`, which deletes those leftovers. It never deletes runs or profiles. It uses `TURSO_DATABASE_URL` and
+`TURSO_AUTH_TOKEN` from `.env` (or the shell) to check the live database, otherwise the local one.
+
+A multiplayer run that two teammates both imported is stored twice on purpose, once from each player's side, so
+this isn't overlap.
+
+On Turso, the limit that matters is **rows read**: every row a query looks at counts, not just the rows it returns.
+Three things keep it down:
+
+- Shared statistics are cached by Vercel for five minutes.
+- The start-up backfills run at most once a day (the `maintenance` table).
+- Indexes cover the filters.
+
+Turso's dashboard shows which queries read the most rows.
 
 ## Trends
 

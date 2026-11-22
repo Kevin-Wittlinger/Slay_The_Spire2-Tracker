@@ -40,6 +40,23 @@ CREATE TABLE IF NOT EXISTS profile_runs (
   PRIMARY KEY (profile_id, run_id)
 );
 
+-- Personal achievement badges a profile has earned, kept even if the requirement grows later (a new
+-- character is added): the badge then shows as earned but outdated. See lib/achievements.js.
+CREATE TABLE IF NOT EXISTS profile_badges (
+  profile_id INTEGER NOT NULL REFERENCES profiles(profile_id) ON DELETE CASCADE,
+  badge_id   TEXT NOT NULL,          -- all_a10 | rotating_streak | speedrunner
+  earned_at  INTEGER NOT NULL,       -- ms since epoch (when the site first saw it earned)
+  characters TEXT NOT NULL,          -- JSON list of the characters it asked for at the time
+  ascension  INTEGER NOT NULL,       -- the ascension it asked for at the time
+  PRIMARY KEY (profile_id, badge_id)
+);
+
+-- When each start-up chore (lib/db.js) last ran, so a busy site doesn't redo it on every cold start.
+CREATE TABLE IF NOT EXISTS maintenance (
+  task     TEXT PRIMARY KEY,
+  last_run INTEGER NOT NULL          -- ms since epoch
+);
+
 -- Fixed-window request counters used for rate limiting.
 CREATE TABLE IF NOT EXISTS rate_limits (
   key          TEXT PRIMARY KEY,

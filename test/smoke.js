@@ -9,6 +9,7 @@ const { createRateLimiter } = require("../lib/ratelimit");
 const { buildTrends } = require("../public/trends");
 const { TABS, runQuery } = require("../db/queries");
 const { computeAchievements } = require("../lib/achievements");
+const { GAME_DATA } = require("../public/game-data");
 
 function makeRun({
   seed,
@@ -119,6 +120,38 @@ async function dispatch(handler, url, method = "GET", body, token, cookie) {
 }
 
 async function main() {
+  // Migrations: a database from before the multiplayer and relic-origin columns is upgraded once,
+  // and later starts skip what is already recorded.
+  {
+    const { createClient } = require("@libsql/client");
+    const { migrate, MIGRATIONS } = require("../lib/migrations");
+    const old = createClient({ url: ":memory:" });
+    // Player 1 won A10 with both characters the site had seen, which earned All A10 under the old
+    // "every character anyone played" rule.
+    await old.executeMultiple(`
+      CREATE TABLE runs (run_id TEXT PRIMARY KEY, character TEXT NOT NULL, ascension INTEGER, win INTEGER NOT NULL,
+        abandoned INTEGER NOT NULL DEFAULT 0, run_time INTEGER, start_time INTEGER);
+      CREATE TABLE profiles (profile_id INTEGER PRIMARY KEY, username TEXT);
+      CREATE TABLE profile_runs (profile_id INTEGER, run_id TEXT, created_at INTEGER);
+      CREATE TABLE run_relics (run_id TEXT, relic_id TEXT, floor_added INTEGER, source TEXT);
+      CREATE TABLE profile_badges (profile_id INTEGER, badge_id TEXT, earned_at INTEGER, characters TEXT,
+        ascension INTEGER, PRIMARY KEY (profile_id, badge_id));
+      INSERT INTO profiles VALUES (1, 'veteran');
+      INSERT INTO runs VALUES ('a', 'CHARACTER.IRONCLAD', 10, 1, 0, 1800, 1), ('b', 'CHARACTER.SILENT', 10, 1, 0, 1800, 2);
+      INSERT INTO profile_runs VALUES (1, 'a', 0), (1, 'b', 0);`);
+    assert.deepStrictEqual(await migrate(old), MIGRATIONS.map((m) => m.version));
+    const columns = async (table) => (await old.execute(`PRAGMA table_info(${table})`)).rows.map((r) => r.name);
+    assert.ok((await columns("runs")).includes("player_count"));
+    assert.ok((await columns("profiles")).includes("steam_id"));
+    assert.ok((await columns("run_relics")).includes("origin"));
+    assert.ok(!(await columns("run_relics")).includes("source"), "the old source column is dropped");
+    const kept = (await old.execute("SELECT badge_id, characters FROM profile_badges ORDER BY badge_id")).rows;
+    assert.deepStrictEqual(kept.map((r) => r.badge_id), ["all_a10", "rotating_streak"]);
+    assert.deepStrictEqual(JSON.parse(kept[0].characters).sort(), ["CHARACTER.IRONCLAD", "CHARACTER.SILENT"]);
+    assert.deepStrictEqual(await migrate(old), [], "nothing runs twice");
+    old.close();
+  }
+
   const db = await openDb(":memory:");
   const importer = createImporter(db);
   const profile = await db.execute({
@@ -441,11 +474,23 @@ async function main() {
   assert.ok((await apiRelics("?source=NOT_ANCIENT")) >= 5);
   await relicDb.close();
 
+  // Start-up chores run at most once a day (each cold start would otherwise re-read every run on Turso).
+  {
+    const { claimDailyTask } = require("../lib/db");
+    const choreDb = await openDb(":memory:"); // opening it already ran (and stamped) the backfills
+    assert.strictEqual(await claimDailyTask(choreDb, "backfills"), false);
+    assert.strictEqual(await claimDailyTask(choreDb, "other"), true);
+    assert.strictEqual(await claimDailyTask(choreDb, "other"), false, "only one caller gets it");
+    await choreDb.execute("UPDATE maintenance SET last_run = last_run - 25 * 60 * 60 * 1000");
+    assert.strictEqual(await claimDailyTask(choreDb, "backfills"), true, "due again after a day");
+    await choreDb.close();
+  }
+
   // Caching: shared statistics may be cached briefly, anything tied to the signed-in user never.
   const cacheApi = createHandler(await openDb(":memory:"));
   const cacheOf = async (url) => (await dispatch(cacheApi, url)).headers["Cache-Control"];
-  assert.match(await cacheOf("/api/stats/characters"), /s-maxage=60/);
-  assert.match(await cacheOf("/api/filters"), /s-maxage=60/);
+  assert.match(await cacheOf("/api/stats/characters"), /s-maxage=300/);
+  assert.match(await cacheOf("/api/filters"), /s-maxage=300/);
   assert.strictEqual(await cacheOf("/api/stats/characters?scope=profile"), "no-store");
   assert.strictEqual(await cacheOf("/api/status"), "no-store");
   assert.strictEqual(await cacheOf("/api/stats/nothing"), "no-store");
@@ -617,6 +662,17 @@ async function main() {
     401,
   );
   assert.strictEqual((await dispatch(handler, "/api/export")).status, 401);
+  // The export holds everything needed to rebuild the data, but never passwords or sessions.
+  {
+    const exported = await dispatch(handler, "/api/export", "GET", undefined, "smoke-test-token");
+    assert.strictEqual(exported.status, 200);
+    const dump = JSON.parse(exported.body);
+    for (const table of ["runs", "run_acts", "profiles", "profile_runs", "run_players", "steam_names"])
+      assert.ok(Array.isArray(dump[table]), `export includes ${table}`);
+    assert.ok(dump.profiles.length >= 1);
+    assert.ok(dump.profiles.every((p) => !("password_hash" in p) && !("password_salt" in p)));
+    assert.ok(!("profile_sessions" in dump));
+  }
 
   // Profile search and viewing another player's public stats.
   const found = JSON.parse(
@@ -807,14 +863,58 @@ async function main() {
     badges = byId([run(chars[0], 10, 0, 300)]);
     assert.ok(Object.values(badges).every((b) => !b.earned));
     assert.strictEqual(badges.speedrunner.progress, "No wins yet");
-    // The endpoint needs a signed-in player (or a profile id) and returns every character in the database.
+    // The endpoint needs a signed-in player (or a profile id) and asks for every character in game-data.js,
+    // whatever has been imported (so an import of a new character can't take badges away).
     assert.strictEqual((await dispatch(handler, "/api/achievements?scope=profile")).status, 401);
     const mine = await dispatch(handler, "/api/achievements?scope=profile", "GET", undefined, undefined, aliceCookie);
     assert.strictEqual(mine.status, 200);
     const body = JSON.parse(mine.body);
     assert.deepStrictEqual(body.badges.map((b) => b.name), ["All A10", "Rotating Streak", "Speedrunner"]);
-    assert.ok(body.characters.length >= 1);
+    assert.deepStrictEqual(
+      body.characters,
+      GAME_DATA.characters.map((c) => `CHARACTER.${c.id}`),
+    );
     assert.strictEqual((await dispatch(handler, "/api/achievements")).status, 400);
+  }
+
+  // Earned badges are kept when the requirement grows, marked outdated; earning it again clears that.
+  {
+    const { profileAchievements } = require("../lib/achievements");
+    const bDb = await openDb(":memory:");
+    const p = Number(
+      (await bDb.execute({
+        sql: "INSERT INTO profiles (username, password_salt, password_hash, created_at) VALUES ('vet','s','h',0)",
+      })).lastInsertRowid,
+    );
+    const all = GAME_DATA.characters.map((c) => `CHARACTER.${c.id}`);
+    const addWin = async (i, character) => {
+      await bDb.batch([
+        { sql: "INSERT INTO runs (run_id, character, ascension, win, run_time, start_time) VALUES (?,?,10,1,1800,?)", args: [`w${i}`, character, i] },
+        { sql: "INSERT INTO profile_runs (profile_id, run_id, created_at) VALUES (?,?,0)", args: [p, `w${i}`] },
+      ], "write");
+    };
+    // Won with every character but the last, and earned All A10 back when the last didn't exist yet.
+    for (const [i, c] of all.slice(0, -1).entries()) await addWin(i, c);
+    await bDb.execute({
+      sql: "INSERT INTO profile_badges (profile_id, badge_id, earned_at, characters, ascension) VALUES (?, 'all_a10', 1, ?, 10)",
+      args: [p, JSON.stringify(all.slice(0, -1))],
+    });
+    let result = Object.fromEntries((await profileAchievements(bDb, p)).badges.map((b) => [b.id, b]));
+    assert.strictEqual(result.all_a10.earned, true, "kept");
+    assert.strictEqual(result.all_a10.outdated, true);
+    const lastName = GAME_DATA.characters.at(-1).name;
+    assert.ok(result.all_a10.outdatedNote.includes(`${lastName} has been added`), result.all_a10.outdatedNote);
+    assert.strictEqual(result.all_a10.earnedAt, 1);
+    assert.strictEqual(result.rotating_streak.earned, false, "never earned, so nothing to keep");
+    // A newly earned badge is recorded, and stays earned (not outdated) under today's rule.
+    await addWin(99, all.at(-1));
+    result = Object.fromEntries((await profileAchievements(bDb, p)).badges.map((b) => [b.id, b]));
+    assert.strictEqual(result.all_a10.earned, true);
+    assert.ok(!result.all_a10.outdated);
+    assert.strictEqual(result.rotating_streak.earned, true);
+    const saved = await bDb.execute({ sql: "SELECT COUNT(*) n FROM profile_badges WHERE profile_id = ?", args: [p] });
+    assert.strictEqual(Number(saved.rows[0].n), 2);
+    await bDb.close();
   }
 
   // Multiplayer runs: stored from the uploader's side, filtered by mode, with teammates listed.
@@ -933,6 +1033,48 @@ async function main() {
     ).status;
   }
   assert.strictEqual(lastStatus, 429);
+
+  // Changing a password and deleting an account.
+  {
+    const accDb = await openDb(":memory:");
+    const acc = createHandler(accDb);
+    const cookieOf = (res) => res.headers["Set-Cookie"].split(";")[0];
+    const register = (username) =>
+      dispatch(acc, "/api/register", "POST", { username, password: "first-pass" });
+    let bob = cookieOf(await register("bob"));
+    const carol = cookieOf(await register("carol"));
+    const importAs = (cookie, runs) => dispatch(acc, "/api/import", "POST", runs, undefined, cookie);
+    await importAs(bob, [makeRun({ seed: "BOB_ONLY" }), makeRun({ seed: "SHARED" })]);
+    await importAs(carol, [makeRun({ seed: "SHARED" })]);
+    const post = (path, body, cookie) => dispatch(acc, path, "POST", body, undefined, cookie);
+    const whoAmI = async (cookie) =>
+      JSON.parse((await dispatch(acc, "/api/me", "GET", undefined, undefined, cookie)).body).profile;
+
+    // Password change: the current password is checked, the new one must be valid, and old sessions end.
+    assert.strictEqual((await post("/api/password", { currentPassword: "x", newPassword: "second-pass" })).status, 401);
+    assert.strictEqual((await post("/api/password", { currentPassword: "wrong", newPassword: "second-pass" }, bob)).status, 401);
+    assert.strictEqual((await post("/api/password", { currentPassword: "first-pass", newPassword: "abc" }, bob)).status, 400);
+    const changed = await post("/api/password", { currentPassword: "first-pass", newPassword: "second-pass" }, bob);
+    assert.strictEqual(changed.status, 200);
+    assert.strictEqual(await whoAmI(bob), null, "the old session is signed out");
+    bob = cookieOf(changed);
+    assert.strictEqual((await whoAmI(bob)).username, "bob");
+    assert.strictEqual((await post("/api/login", { username: "bob", password: "first-pass" })).status, 401);
+    assert.strictEqual((await post("/api/login", { username: "bob", password: "second-pass" })).status, 200);
+
+    // Deleting: needs the password; removes bob, his own runs and their rows, but not a run carol also has.
+    assert.strictEqual((await post("/api/delete-account", { password: "first-pass" }, bob)).status, 401);
+    assert.strictEqual((await post("/api/delete-account", { password: "second-pass" }, bob)).status, 200);
+    assert.strictEqual(await whoAmI(bob), null);
+    const count = async (sql) => Number((await accDb.execute(sql)).rows[0].n);
+    assert.strictEqual(await count("SELECT COUNT(*) n FROM profiles WHERE username = 'bob'"), 0);
+    assert.strictEqual(await count("SELECT COUNT(*) n FROM runs WHERE seed = 'BOB_ONLY'"), 0);
+    assert.strictEqual(await count("SELECT COUNT(*) n FROM run_cards WHERE run_id LIKE 'BOB_ONLY:%'"), 0);
+    assert.strictEqual(await count("SELECT COUNT(*) n FROM runs WHERE seed = 'SHARED'"), 1);
+    assert.strictEqual(await count("SELECT COUNT(*) n FROM profile_runs"), 1, "only carol's link is left");
+    assert.strictEqual((await whoAmI(carol)).username, "carol");
+    await accDb.close();
+  }
 
   await db.close();
   console.log("All smoke tests passed.");
