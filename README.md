@@ -44,7 +44,7 @@ soon as someone imports a run with it. The rules are in `lib/achievements.js`.
   multiplayer-only cards (tagged "Co-op") show up in the card tables. **Recent runs** lists who you played with and
   your win rate with each of them, and the **Teammates** tab sums it up per teammate. Run files only hold Steam ids,
   so the uploader's id comes from the Steam folder in the path, or as the one player in all the selected multiplayer
-  runs; it is then remembered on the profile. A teammate shows by username once they import their own runs here, otherwise by their Steam name (looked up by the server and cached for a week; set `STEAM_API_KEY` to use the Steam Web API instead of reading public profile pages),
+  runs; it is then remembered on the profile. A teammate shows by username once they import their own runs here, otherwise by their Steam name (looked up when runs are imported and cached for a week; set `STEAM_API_KEY` in `.env` or your host to use the Steam Web API, see `.env.example`; without it public profile pages are read),
   and always links to their Steam profile when they have no site profile. Personal achievements stay solo only.
 - **No double counting.** A run is identified by seed plus start time (plus the uploader's Steam id for
   multiplayer), so repeated uploads are safe.

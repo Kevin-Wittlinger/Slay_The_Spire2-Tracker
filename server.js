@@ -1,6 +1,7 @@
 const http = require("http");
 const fs = require("fs");
 const path = require("path");
+require("./lib/env").loadEnv();
 const { openDb } = require("./lib/db");
 const { createHandler } = require("./lib/handler");
 

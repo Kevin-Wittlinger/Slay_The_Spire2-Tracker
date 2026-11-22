@@ -821,6 +821,11 @@ async function main() {
   {
     const mpDb = await openDb(":memory:");
     const mpApi = createHandler(mpDb);
+    // Imports look up teammates' Steam names; the tests must never reach the real Steam.
+    const originalFetch = global.fetch;
+    global.fetch = async () => {
+      throw new Error("offline");
+    };
     const ME = "76561198000000001";
     const MATE = "76561198000000002";
     const OTHER = "76561198000000003";
@@ -892,6 +897,7 @@ async function main() {
     {
       const realFetch = global.fetch;
       const asked = [];
+      await mpDb.execute("DELETE FROM steam_names"); // the offline imports above stamped failed lookups
       global.fetch = async (url) => {
         asked.push(String(url));
         const id = String(url).match(/profiles\/(\d+)/)?.[1];
@@ -912,6 +918,7 @@ async function main() {
         global.fetch = realFetch;
       }
     }
+    global.fetch = originalFetch;
     await mpDb.close();
   }
 
