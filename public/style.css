@@ -896,6 +896,12 @@ td.mates-cell {
   font-size: 13px;
   line-height: 1.45;
 }
+.area-thumb {
+  display: block;
+  flex: none;
+  border-radius: 4px;
+  object-fit: cover;
+}
 .cell-icon.card-thumb {
   width: 34px;
   height: 42px; /* cards are taller than wide */

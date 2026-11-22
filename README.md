@@ -182,6 +182,10 @@ site origins, and the API accepts them (`?source=SHOP`), but the dropdown doesn'
 column existed are filled in when the server starts, from the fights, events and card offers the database kept. That
 cannot tell a treasure chest from a rest site, so those show as treasure until the run is imported again.
 
+The Areas tab shows a small picture beside each area name (`public/img/areas/<id>.png`, 96x54, shrunk from the
+wiki's `StS2_<Area>.png` scenes, which are the only area pictures it has). A new area needs its id and name in
+`public/game-data.js` and its picture there; without one the table just shows the name.
+
 On the Enemies and Killed by tabs, a **Weak** encounter is from the easier pool of regular fights met early in an act;
 **Normal** is the harder pool met later.
 

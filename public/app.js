@@ -189,6 +189,17 @@ function loadRelicInfo() {
   return relicInfo;
 }
 
+// Area thumbnail + name (public/img/areas/<id>.png, shrunk from the wiki's area pictures). The Areas
+// tab sends the display name ("Hive"), so it is matched back to the id in game-data.js; an area without a
+// picture just shows its name.
+function areaCell(value) {
+  const area = GAME_DATA.areas.find((a) => a.name === value);
+  if (!area) return null;
+  const img = el("img", { class: "area-thumb", src: `img/areas/${area.id.toLowerCase()}.png`, alt: "", width: 64, height: 36, loading: "lazy" });
+  img.addEventListener("error", () => img.remove(), { once: true });
+  return el("span", { class: "icon-cell" }, img, el("span", { text: value }));
+}
+
 // Enemy picture + name. Pictures come from the area pages of the Slay the Spire wiki, saved per
 // encounter without its strength suffix: ENCOUNTER.NIBBITS_WEAK -> img/monsters/nibbits.png.
 function encounterCell(value, col) {
@@ -720,6 +731,7 @@ const CELL_RENDERERS = {
   encounter: encounterCell,
   killed_by: encounterCell,
   played_as: characterListCell,
+  area: areaCell,
 };
 
 // What the search box matches for a cell, where that differs from the text shown.
