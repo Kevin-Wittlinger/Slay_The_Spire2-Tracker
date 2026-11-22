@@ -989,12 +989,16 @@ async function renderView(loadId) {
   try {
     const tab = state.tabs.find((t) => t.id === state.tab);
     const character = $("fChar").value;
+    const trends = tab?.kind === "trends";
     // With one character picked, the play-rate chart still needs everyone's runs (same other filters).
-    const [rows, allRows] = await Promise.all([
+    // Trends also shows the top cards and relics, from the Card WR and Relic WR statistics.
+    const [rows, allRows, cardRows, relicRows] = await Promise.all([
       api(`/api/stats/${state.tab}?${statsQuery()}`),
-      tab?.kind === "trends" && character
+      trends && character
         ? api(`/api/stats/${state.tab}?${statsQuery({ allCharacters: true })}`)
         : null,
+      trends ? api(`/api/stats/card_win_rate?${statsQuery()}`).catch(() => []) : null,
+      trends ? api(`/api/stats/relic_win_rate?${statsQuery()}`).catch(() => []) : null,
     ]);
     let shown = tab?.kind === "trends" ? rows : await withCardInfo(rows);
     // Solo runs have no teammates, so an all-solo table leaves that column out.
@@ -1002,7 +1006,14 @@ async function renderView(loadId) {
       shown = shown.map(({ teammates, ...row }) => row);
     if (tab?.kind !== "trends") await loadSteamNames(shown);
     if (loadId !== state.loadId) return;
-    if (tab?.kind === "trends") renderTrends(rows, host, { character, allRows });
+    if (tab?.kind === "trends")
+      renderTrends(rows, host, {
+        character,
+        allRows,
+        cardRows,
+        relicRows,
+        minRuns: Number($("fMin").value) || 1,
+      });
     else renderTable(shown, host);
   } catch (error) {
     if (loadId !== state.loadId) return;
@@ -1126,6 +1137,18 @@ function relicSourceSelect() {
   return select;
 }
 
+// Opens a statistics tab (also used by the "See every card/relic" links on Trends).
+function setTab(id) {
+  if (!state.tabs.some((tab) => tab.id === id)) return;
+  state.tab = id;
+  tableMemory = null;
+  // Teammates are multiplayer-only; switch Mode so the cards above describe the same runs.
+  if (id === "teammates" && !$("fMode").value) $("fMode").value = "multi";
+  renderTabs();
+  refreshStats();
+  $("tabs").scrollIntoView({ block: "nearest" });
+}
+
 function renderTabs() {
   const tabs = state.tabs.filter((tab) => multiplayerAllowed() || !MULTIPLAYER_TABS.has(tab.id));
   $("tabs").replaceChildren(
@@ -1135,14 +1158,7 @@ function renderTabs() {
         class: tab.id === state.tab ? "on" : "",
         "aria-pressed": String(tab.id === state.tab),
         text: tab.title,
-        onclick: () => {
-          state.tab = tab.id;
-          tableMemory = null;
-          // Teammates are multiplayer-only; switch Mode so the cards above describe the same runs.
-          if (tab.id === "teammates" && !$("fMode").value) $("fMode").value = "multi";
-          renderTabs();
-          refreshStats();
-        },
+        onclick: () => setTab(tab.id),
       }),
     ),
   );

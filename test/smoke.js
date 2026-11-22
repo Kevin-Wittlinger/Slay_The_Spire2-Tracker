@@ -557,6 +557,25 @@ async function main() {
     [["A", 2, 2, 100, 100], ["B", 2, 1, 50, 50]],
   );
   assert.strictEqual(buildTrends([]).total, 0);
+
+  // Trends' top 5 cards / relics: enough runs to count, best win rate first, ties to the bigger sample.
+  {
+    const { topWinRates, TOP_MIN_RUNS } = require("../public/trends");
+    const row = (card, runs, wins) => ({ card, runs, wins, win_pct: Math.round((1000 * wins) / runs) / 10 });
+    const rows = [
+      row("CARD.LUCKY", 1, 1), // 100%, but only one run: left out
+      row("CARD.A", 10, 8), row("CARD.B", 20, 16), row("CARD.C", 6, 3),
+      row("CARD.D", 5, 4), row("CARD.E", 9, 1), row("CARD.F", 12, 6), row("CARD.G", 7, 7),
+    ];
+    assert.strictEqual(TOP_MIN_RUNS, 5);
+    assert.deepStrictEqual(
+      topWinRates(rows, "card").map((r) => r.card),
+      ["CARD.G", "CARD.B", "CARD.A", "CARD.D", "CARD.F"],
+    );
+    assert.deepStrictEqual(topWinRates(rows, "card", 10).map((r) => r.card), ["CARD.B", "CARD.A", "CARD.F"]);
+    assert.deepStrictEqual(topWinRates([], "card"), []);
+    assert.deepStrictEqual(topWinRates(null, "relic"), []);
+  }
   const tabList = JSON.parse((await dispatch(createHandler(db), "/api/tabs")).body);
   assert.strictEqual(tabList.find((tab) => tab.id === "trends").kind, "trends");
   assert.strictEqual(tabList.find((tab) => tab.id === "characters").kind, "table");

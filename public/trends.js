@@ -378,6 +378,84 @@ function playRateChart(data, options, mode) {
   );
 }
 
+// ----- Top 5 cards / relics by win rate -----
+// A card in one winning run would be "100%", so only cards and relics in at least TOP_MIN_RUNS runs
+// rank (or the page's Min sample, if that is higher).
+const TOP_COUNT = 5;
+const TOP_MIN_RUNS = 5;
+const TOP_BAR_COLOR = "#bb8b2b"; // the site's gold, one step deeper so bars pass contrast on the dark panel
+
+// rows: Card WR / Relic WR rows ({ card | relic, runs, wins, win_pct }). Highest win rate first; ties go
+// to the one seen in more runs, then by name so the order never jumps between reloads.
+function topWinRates(rows, key, minRuns = TOP_MIN_RUNS, count = TOP_COUNT) {
+  return (rows || [])
+    .filter((row) => row && row[key] && Number(row.runs) >= minRuns)
+    .sort(
+      (a, b) =>
+        Number(b.win_pct) - Number(a.win_pct) ||
+        Number(b.runs) - Number(a.runs) ||
+        String(a[key]).localeCompare(String(b[key])),
+    )
+    .slice(0, count);
+}
+
+// Horizontal bars on a 0-100% scale, one row per item: icon + name (hover it for the card or relic
+// popup), the bar, then the win rate and "wins/runs" at the bar's end.
+function topBarsChart({ title, rows, key, cell, minRuns, tab, noun }) {
+  const top = topWinRates(rows, key, minRuns);
+  const section = el(
+    "section",
+    { class: "trend-chart top-bars", "aria-label": title },
+    el(
+      "div",
+      { class: "trend-title" },
+      title,
+      el("span", { class: "trend-sub", text: `best win rate, in at least ${minRuns} runs` }),
+    ),
+  );
+  if (!top.length) {
+    section.append(
+      el("p", { class: "hint top-empty", text: `No ${noun} has been in ${minRuns} runs yet with these filters.` }),
+    );
+    return section;
+  }
+  const list = el("ol", { class: "top-list" });
+  for (const row of top) {
+    const pct = Math.max(0, Math.min(100, Number(row.win_pct)));
+    const name = (typeof cell === "function" && cell(row[key])) || el("span", { text: pretty(row[key]) });
+    const detail = `${pretty(row[key])}: won ${row.wins} of ${row.runs} runs (${pct1(pct)})`;
+    // Set through the DOM: the Content-Security-Policy blocks inline style="" attributes.
+    const bar = el("div", { class: "top-bar" });
+    bar.style.setProperty("width", `${pct}%`);
+    bar.style.setProperty("background", TOP_BAR_COLOR);
+    list.append(
+      el(
+        "li",
+        { class: "top-row" },
+        el("div", { class: "top-name" }, name),
+        el(
+          "div",
+          { class: "top-track", title: detail, role: "img", "aria-label": detail },
+          bar,
+        ),
+        el(
+          "div",
+          { class: "top-value" },
+          el("b", { text: pct1(pct) }),
+          el("span", { text: ` ${row.wins}/${row.runs}` }),
+        ),
+      ),
+    );
+  }
+  section.append(list);
+  // The full table is the accessible "table view" of this chart.
+  if (typeof setTab === "function")
+    section.append(
+      el("button", { type: "button", class: "link top-more", text: `See every ${noun} →`, onclick: () => setTab(tab) }),
+    );
+  return section;
+}
+
 function renderTrends(rows, host, options = {}) {
   trendsState.last = { rows, host, options };
   if (rows.length < 2) {
@@ -536,6 +614,33 @@ function renderTrends(rows, host, options = {}) {
     ),
     // Play rate only means something when several characters are in view.
     ...[playRateChart(data, options, mode)].filter(Boolean),
+    // Top 5 cards and relics by win rate, side by side (stacked on narrow screens).
+    ...(options.cardRows || options.relicRows
+      ? [
+          el(
+            "div",
+            { class: "top-grid" },
+            topBarsChart({
+              title: "Top 5 cards by win rate",
+              rows: options.cardRows,
+              key: "card",
+              cell: typeof cardCell === "function" ? cardCell : null,
+              minRuns: Math.max(TOP_MIN_RUNS, options.minRuns || 1),
+              tab: "card_win_rate",
+              noun: "card",
+            }),
+            topBarsChart({
+              title: "Top 5 relics by win rate",
+              rows: options.relicRows,
+              key: "relic",
+              cell: typeof relicCell === "function" ? relicCell : null,
+              minRuns: Math.max(TOP_MIN_RUNS, options.minRuns || 1),
+              tab: "relic_win_rate",
+              noun: "relic",
+            }),
+          ),
+        ]
+      : []),
     el("p", {
       class: "hint",
       text:
@@ -564,4 +669,4 @@ if (typeof window !== "undefined") {
   });
 }
 
-if (typeof module !== "undefined") module.exports = { buildTrends };
+if (typeof module !== "undefined") module.exports = { buildTrends, topWinRates, TOP_MIN_RUNS };

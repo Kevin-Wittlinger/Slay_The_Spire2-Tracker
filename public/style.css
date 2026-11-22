@@ -676,6 +676,88 @@ td.mates-cell {
 .trend-wrap .hint {
   margin: 10px 0 0;
 }
+
+/* Trends: top 5 cards and relics by win rate, side by side (stacked on narrow screens). */
+.top-grid {
+  display: grid;
+  /* min(): never wider than the panel, so a phone gets one full-width column instead of overflow. */
+  grid-template-columns: repeat(auto-fit, minmax(min(320px, 100%), 1fr));
+  gap: 14px 28px;
+  margin-top: 18px;
+  padding-top: 14px;
+  border-top: 1px solid var(--line);
+}
+/* Side by side, not stacked: no divider between the two (the grid has its own above). */
+.top-grid .trend-chart + .trend-chart {
+  margin-top: 0;
+  padding-top: 0;
+  border-top: 0;
+}
+.top-bars .trend-title {
+  font-weight: 600;
+}
+.top-list {
+  display: grid;
+  gap: 4px;
+  margin: 8px 0 0;
+  padding: 0;
+  list-style: none;
+}
+.top-row {
+  display: grid;
+  grid-template-columns: minmax(0, 11rem) 1fr auto;
+  align-items: center;
+  gap: 10px;
+  min-height: 46px; /* fits a card picture, so card and relic rows line up across the two charts */
+}
+.top-name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.top-name .icon-cell {
+  max-width: 100%;
+}
+/* The track is the 0-100% scale: a hairline-quiet band one step off the panel. */
+.top-track {
+  height: 18px;
+  background: var(--panel-2);
+  border-radius: 0 4px 4px 0;
+}
+.top-bar {
+  height: 100%;
+  border-radius: 0 4px 4px 0; /* rounded data end, square at the 0% baseline */
+}
+.top-value {
+  min-width: 6.5rem;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.top-value span {
+  color: var(--dim);
+  font-size: 12px;
+}
+.top-more {
+  margin-top: 8px;
+  font-size: 12px;
+}
+@media (max-width: 600px) {
+  .top-row {
+    grid-template-columns: minmax(0, 8.5rem) minmax(40px, 1fr) auto;
+    gap: 8px;
+  }
+  .top-value {
+    min-width: 0;
+  }
+  /* "wins/runs" moves under the percentage so the row fits a phone. */
+  .top-value span {
+    display: block;
+  }
+}
+.trend-wrap .top-empty {
+  margin-top: 8px;
+}
 .asc-icon {
   display: block;
   max-width: none;

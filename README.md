@@ -122,6 +122,11 @@ on your latest 50 runs, where each point is the win rate of the 10 runs up to it
 character in both charts, and clicking a character in the legend hides or shows it. The character, ascension and patch
 filters apply, and hovering a chart shows the win rate at any run.
 
+Below them, two bar charts show the **top 5 cards** and **top 5 relics** by win rate, from the same numbers as the Card WR
+and Relic WR tabs (same filters, starter cards and relics left out). A card or relic must be in at least 5 runs to rank,
+or the Min sample if that is higher, so a single lucky run can't top the list. Hovering one shows its card or relic
+popup, and **See every card / relic** opens the full table.
+
 ## Filters
 
 Character, ascension, **patch** (the game build a run was played on) and minimum sample filter every tab. They are
