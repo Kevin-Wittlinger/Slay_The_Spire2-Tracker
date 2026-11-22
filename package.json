@@ -6,7 +6,8 @@
   "scripts": {
     "start": "node server.js",
     "test": "node test/smoke.js",
-    "db:health": "node scripts/db-health.js"
+    "db:health": "node scripts/db-health.js",
+    "update:relics": "node scripts/update-relic-info.js"
   },
   "engines": {
     "node": "22.x"

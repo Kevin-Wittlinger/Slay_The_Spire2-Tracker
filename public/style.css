@@ -711,6 +711,49 @@ td.mates-cell {
 .icon-cell:has(.card-thumb) {
   cursor: zoom-in;
 }
+.icon-cell[data-relic] {
+  cursor: help;
+}
+/* Relic hover popup: icon, name, rarity and what the relic does. */
+.relic-preview {
+  position: fixed;
+  z-index: 50;
+  width: 280px;
+  padding: 12px 14px;
+  background: var(--panel-2);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.6);
+  pointer-events: none; /* never steals the hover from the row underneath */
+}
+.relic-preview[hidden] {
+  display: none;
+}
+.relic-preview-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 8px;
+}
+.relic-preview-head img {
+  width: 48px;
+  height: 48px;
+  flex: none;
+}
+.relic-preview strong {
+  display: block;
+  font-size: 15px;
+}
+.relic-rarity {
+  color: var(--accent);
+  font-size: 12px;
+}
+.relic-preview p {
+  margin: 0;
+  color: var(--text);
+  font-size: 13px;
+  line-height: 1.45;
+}
 .cell-icon.card-thumb {
   width: 34px;
   height: 42px; /* cards are taller than wide */

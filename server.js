@@ -26,7 +26,7 @@ const MIME = {
 // including the versioned app.js and style.css, is checked on each load.
 const LONG_CACHE = "public, max-age=604800, stale-while-revalidate=86400";
 const cacheControl = (rel) =>
-  rel.startsWith("img/") || rel === "card-info.json" ? LONG_CACHE : "no-cache";
+  rel.startsWith("img/") || rel === "card-info.json" || rel === "relic-info.json" ? LONG_CACHE : "no-cache";
 
 const SECURITY_HEADERS = {
   "X-Content-Type-Options": "nosniff",

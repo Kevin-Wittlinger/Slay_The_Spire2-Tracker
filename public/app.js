@@ -173,7 +173,20 @@ function characterLogo(value, scale = 1) {
 // (RELIC.BURNING_BLOOD -> burning_blood.png). A relic without an icon just shows its name.
 function relicCell(value) {
   const match = typeof value === "string" && value.match(/^RELIC\.([A-Z0-9_]+)$/);
-  return match ? iconCell(`img/relics/${match[1].toLowerCase()}.png`, value, "relic") : null;
+  if (!match) return null;
+  const cell = iconCell(`img/relics/${match[1].toLowerCase()}.png`, value, "relic");
+  cell.dataset.relic = value; // the popup (setupCardPreview) looks the description up by this id
+  return cell;
+}
+
+// Relic rarity and description text, from the wiki (public/relic-info.json, rebuilt with
+// `npm run update:relics`): { "RELIC.BURNING_BLOOD": ["Starter", "At the end of combat, heal 6 HP."] }.
+let relicInfo = null;
+function loadRelicInfo() {
+  relicInfo ||= fetch("relic-info.json?v=1")
+    .then((res) => (res.ok ? res.json() : {}))
+    .catch(() => ({}));
+  return relicInfo;
 }
 
 // Enemy picture + name. Pictures come from the area pages of the Slay the Spire wiki, saved per
@@ -310,34 +323,72 @@ function characterListCell(value) {
 // be read. Large pictures are img/cards-large/<id>.webp, the small ones' bigger siblings.
 function setupCardPreview() {
   const preview = el("div", { class: "card-preview", hidden: "" }, el("img", { alt: "", width: 240 }));
-  document.body.append(preview);
+  // Relics have no big picture like cards do, so the popup is a small text card: icon, name, rarity,
+  // and what the relic does.
+  const relicImg = el("img", { alt: "", width: 48, height: 48 });
+  const relicName = el("strong");
+  const relicRarity = el("span", { class: "relic-rarity" });
+  const relicText = el("p");
+  const relicPreview = el(
+    "div",
+    { class: "relic-preview", hidden: "" },
+    el("div", { class: "relic-preview-head" }, relicImg, el("div", {}, relicName, relicRarity)),
+    relicText,
+  );
+  document.body.append(preview, relicPreview);
   const big = preview.firstChild;
   let current = null;
 
-  const place = (cell) => {
+  // Next to the hovered cell (right if it fits, else left), never off the window edges.
+  const placeBeside = (popup, cell, fallbackW, fallbackH) => {
     const rect = cell.getBoundingClientRect();
-    const w = preview.offsetWidth || 240;
-    const h = preview.offsetHeight || 300;
-    // Right of the card's name if it fits, else left of its picture; never off the window edges.
+    const w = popup.offsetWidth || fallbackW;
+    const h = popup.offsetHeight || fallbackH;
     let left = rect.right + 16;
     if (left + w > window.innerWidth - 8) left = Math.max(8, rect.left - w - 8);
     const top = Math.min(Math.max(8, rect.top + rect.height / 2 - h / 2), window.innerHeight - h - 8);
-    preview.style.setProperty("left", `${left}px`);
-    preview.style.setProperty("top", `${top}px`);
+    popup.style.setProperty("left", `${left}px`);
+    popup.style.setProperty("top", `${top}px`);
   };
+  const place = (cell) => placeBeside(preview, cell, 240, 300);
   const hide = () => {
     current = null;
     preview.hidden = true;
+    relicPreview.hidden = true;
   };
   const cardCellOf = (node) => {
     const cell = node instanceof Element ? node.closest(".icon-cell") : null;
     return cell?.querySelector(".card-thumb") ? cell : null;
   };
+  const relicCellOf = (node) => (node instanceof Element ? node.closest(".icon-cell[data-relic]") : null);
+
+  const showRelic = async (cell) => {
+    const id = cell.dataset.relic;
+    const [rarity, description] = (await loadRelicInfo())[id] || [];
+    if (current !== cell) return; // the pointer moved on while the data loaded
+    if (!description) return; // no wiki text for this relic (e.g. the Fake Merchant's): no popup
+    const icon = cell.querySelector("img");
+    relicImg.hidden = !icon;
+    if (icon) relicImg.src = icon.getAttribute("src");
+    relicName.textContent = pretty(id);
+    relicRarity.textContent = rarity;
+    relicText.textContent = description; // plain text only: wiki text is never put in as HTML
+    relicPreview.hidden = false;
+    placeBeside(relicPreview, cell, 280, 120);
+  };
 
   document.addEventListener("mouseover", (event) => {
+    const relic = relicCellOf(event.target);
+    if (relic) {
+      if (relic === current) return;
+      hide();
+      current = relic;
+      return showRelic(relic);
+    }
     const cell = cardCellOf(event.target);
     if (!cell) return hide();
     if (cell === current) return;
+    relicPreview.hidden = true;
     current = cell;
     const small = cell.querySelector(".card-thumb").getAttribute("src");
     big.onload = () => current === cell && ((preview.hidden = false), place(cell));

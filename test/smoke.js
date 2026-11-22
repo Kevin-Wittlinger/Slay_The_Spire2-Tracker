@@ -120,6 +120,24 @@ async function dispatch(handler, url, method = "GET", body, token, cookie) {
 }
 
 async function main() {
+  // Relic popup text (public/relic-info.json, built by scripts/update-relic-info.js from wiki markup).
+  {
+    const { toPlainText, relicId } = require("../scripts/update-relic-info");
+    assert.strictEqual(relicId("Burning Blood"), "RELIC.BURNING_BLOOD");
+    assert.strictEqual(relicId("Pael's Claw"), "RELIC.PAELS_CLAW");
+    // Icons, links, line breaks and energy markers become plain words.
+    assert.strictEqual(
+      toPlainText(`At the start of each combat, gain 8 <span class="power-trigger" data-name="Vigor">[[File:V.png|22px|link=X]] [[Slay_the_Spire_2:Vigor|Vigor]]</span>.`),
+      "At the start of each combat, gain 8 Vigor.",
+    );
+    assert.strictEqual(toPlainText("gain 7<br><span data-name='@ST'>[[File:S.png|24px|link=]]</span>."), "gain 7 Stars.");
+    assert.strictEqual(toPlainText("lose @CE@CE, then gain an additional @CE next turn"), "lose 2 Energy, then gain an additional Energy next turn");
+    assert.strictEqual(toPlainText("a random [https://x.test/?a=b Rare Card] to add"), "a random Rare Card to add");
+    assert.strictEqual(toPlainText("''Once'' per [[Combat|fight]] <b>now</b>"), "Once per fight now");
+    // The shipped data file is deliberately not checked: a relic missing from it (a new relic, or one
+    // the wiki doesn't list) just has no popup, and that must never fail a build.
+  }
+
   // Migrations: a database from before the multiplayer and relic-origin columns is upgraded once,
   // and later starts skip what is already recorded.
   {

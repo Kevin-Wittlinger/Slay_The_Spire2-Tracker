@@ -90,6 +90,8 @@ also needs its two images (`img/characters/<name>.png` and `img/heads/<name>.png
 | `server.js`        | Local development server                                    |
 | `public/`          | The website (HTML, CSS, JS)                                 |
 | `scripts/db-health.js` | `npm run db:health`: table sizes and leftover data (see below) |
+| `scripts/update-relic-info.js` | `npm run update:relics`: rebuilds `public/relic-info.json` from the wiki |
+| `public/relic-info.json` | Relic rarity and description text, shown in the relic popup |
 | `test/smoke.js`    | `npm test`; also run by GitHub Actions on every push (`.github/workflows/test.yml`) |
 
 Locally, the database lives at `data/spire-ledger.db`. Production data is stored in Turso.
@@ -156,6 +158,12 @@ visitors in some regions (for example the EU) may need a notice or a consent ban
 - Win rate for a card or relic means: of the runs that ended with it, the share that were wins.
   Starter cards and starting relics are left out of card and relic stats. Small samples are noisy, so raise "Min sample".
 - Event queries still exist in `db/queries.js` but are hidden from the site.
-- Images under `public/img/` and `card-info.json` are cached by browsers for a week (`vercel.json`, and the same rule
+- Hovering a relic anywhere it is listed shows a popup with its rarity and what it does, like the card pictures do for
+  cards. The text comes from the wiki's relic data: after a game patch adds or changes relics, run
+  `npm run update:relics` (it only reads from the wiki), add the new relic's picture to `public/img/relics/`, bump the
+  `relic-info.json?v=` number in `public/app.js`, and commit the file. A relic without a description (a brand-new
+  one, or the Fake Merchant's fake relics, which aren't on the wiki) simply has no popup; nothing breaks and no test
+  fails. The script lists the relic pictures it found no text for.
+- Images under `public/img/`, `card-info.json` and `relic-info.json` are cached by browsers for a week (`vercel.json`, and the same rule
   in `server.js`).
 - An upload imports up to 4 runs at once (`IMPORT_CONCURRENCY` in `lib/handler.js`).
