@@ -397,7 +397,8 @@ function setupCardPreview() {
     if (big.complete && big.naturalWidth) big.onload();
   });
   document.addEventListener("mouseleave", hide);
-  window.addEventListener("scroll", hide, { passive: true });
+  // Any scroll, of the page or of a box inside it (a table, the run page), moves the cell away.
+  document.addEventListener("scroll", hide, { passive: true, capture: true });
   window.addEventListener("blur", hide);
 }
 
@@ -570,6 +571,7 @@ function writeHash() {
   if (state.page === "achievements") return history.replaceState(null, "", "#view=achievements");
   const params = new URLSearchParams({ tab: state.tab, view: viewToken(), ...activeFilters() });
   if (trendsState.mode === "split") params.set("trend", "split");
+  if (runPage.id) params.set("run", runPage.id); // an open run page (run.js)
   history.replaceState(null, "", `#${params}`);
 }
 
@@ -578,6 +580,7 @@ function readHash() {
   const initial = { filters: {} };
   if (params.get("tab")) initial.tab = params.get("tab");
   if (params.get("trend") === "split") trendsState.mode = "split";
+  if (params.get("run")) initial.run = params.get("run");
   const view = params.get("view") || "global";
   const other = view.match(/^(\d+):([\w-]{1,24})$/);
   if (other) {
@@ -771,12 +774,14 @@ function renderTable(rows, host) {
     return;
   }
 
-  const cols = Object.keys(rows[0]);
+  // run_id isn't shown: a row that has one gets a Details button that opens the run page (run.js).
+  const cols = Object.keys(rows[0]).filter((col) => col !== "run_id");
+  const hasRunPage = "run_id" in rows[0];
   // Everything a redraw needs is worked out once per row: the values, what each sorts by, the
   // lowercase text the search box matches, and (on first display) the <tr> itself. Searching and
   // sorting then only filter and reorder rows that already exist.
   const data = rows.map((source) => {
-    const row = { cells: cols.map((col) => source[col]), tr: null };
+    const row = { cells: cols.map((col) => source[col]), tr: null, runId: source.run_id || null };
     if ("player" in source) {
       // Keep the clickable list on the row; the cell value becomes plain names
       // so sorting and searching work on what people see.
@@ -799,8 +804,21 @@ function renderTable(rows, host) {
       .join("\n");
     return row;
   });
-  const rowElement = (row) =>
-    (row.tr ||= el("tr", {}, ...row.cells.map((value, i) => buildCell(row, cols[i], value))));
+  const rowElement = (row) => {
+    if (row.tr) return row.tr;
+    row.tr = el("tr", {}, ...row.cells.map((value, i) => buildCell(row, cols[i], value)));
+    if (row.runId) {
+      row.tr.classList.add("run-row");
+      row.tr.append(
+        el("td", {}, el("button", { type: "button", class: "details-btn", text: "Details", "aria-label": "Open the full run", onclick: () => openRun(row.runId) })),
+      );
+      // Clicking anywhere else on the row opens it too (but not a player link inside it).
+      row.tr.addEventListener("click", (event) => {
+        if (!event.target.closest("a, button")) openRun(row.runId);
+      });
+    }
+    return row.tr;
+  };
 
   if (!tableMemory || tableMemory.tab !== state.tab)
     tableMemory = { tab: state.tab, search: "", selected: new Map(), sortCol: null, ascending: false };
@@ -922,6 +940,7 @@ function renderTable(rows, host) {
     filteredCols.add(i);
     toolbar.append(select);
   });
+  if (hasRunPage) headRow.append(el("th", { scope: "col", class: "no-sort" }, el("span", { class: "visually-hidden", text: "Run page" })));
   toolbar.append(count);
   // A remembered filter on a column that now has no dropdown (too few values) can't be cleared, so drop it.
   for (const i of [...selected.keys()]) if (!filteredCols.has(i)) selected.delete(i);
@@ -1683,6 +1702,7 @@ function wireEvents() {
   $("deleteForm").addEventListener("submit", submitDelete);
 
   setupCardPreview();
+  wireRunPage();
   const onFilter = () => refreshStats();
   $("fMode").addEventListener("change", onFilter);
   $("fAsc").addEventListener("change", onFilter);
@@ -1795,6 +1815,7 @@ async function main() {
     state.view = { scope: "profile", profile: state.me };
     return showAchievements();
   }
+  if (initial.run) openRun(initial.run);
   await refresh({ withFilters: !filtersLoaded });
 }
 

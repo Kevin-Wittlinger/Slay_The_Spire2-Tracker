@@ -164,6 +164,8 @@ async function main() {
     assert.ok((await columns("profiles")).includes("steam_id"));
     assert.ok((await columns("run_relics")).includes("origin"));
     assert.ok(!(await columns("run_relics")).includes("source"), "the old source column is dropped");
+    for (const col of ["game_mode", "final_hp", "max_hp", "gold", "potion_slots", "potions"])
+      assert.ok((await columns("runs")).includes(col), `runs.${col} is added for the run page`);
     const kept = (await old.execute("SELECT badge_id, characters FROM profile_badges ORDER BY badge_id")).rows;
     assert.deepStrictEqual(kept.map((r) => r.badge_id), ["all_a10", "rotating_streak"]);
     assert.deepStrictEqual(JSON.parse(kept[0].characters).sort(), ["CHARACTER.IRONCLAD", "CHARACTER.SILENT"]);
@@ -1171,6 +1173,82 @@ async function main() {
     assert.strictEqual(await count("SELECT COUNT(*) n FROM profile_runs"), 1, "only carol's link is left");
     assert.strictEqual((await whoAmI(carol)).username, "carol");
     await accDb.close();
+  }
+
+  // The run page (GET /api/run): every room in order with what happened, how the run ended, the deck
+  // with enchantments. Runs imported before it existed are filled in by importing them again.
+  {
+    const runDb = await openDb(":memory:");
+    const handler = createHandler(runDb);
+    const importer = createImporter(runDb);
+    const run = makeRun({ seed: "RUNPAGE", win: true });
+    run.game_mode = "standard";
+    run.players[0].max_potion_slot_count = 3;
+    run.players[0].potions = [{ id: "POTION.FIRE_POTION", slot_index: 0 }];
+    run.players[0].deck[1].enchantment = { id: "ENCHANTMENT.SLITHER", amount: 1 };
+    run.map_point_history[0][2].player_stats[0] = {
+      ...run.map_point_history[0][2].player_stats[0],
+      max_hp: 80,
+      current_gold: 123,
+      potion_used: ["POTION.BLOCK_POTION"],
+    };
+    await runDb.execute("INSERT INTO profiles (username, password_salt, password_hash, created_at) VALUES ('dee', 'x', 'x', 0)");
+    assert.strictEqual((await importer.importRun(run, 1)).status, "imported");
+    const runId = `RUNPAGE:${run.start_time}`;
+    const [recent] = await runQuery(runDb, "recent_runs", {});
+    assert.strictEqual(recent.run_id, runId, "Recent runs gives the page the run id");
+
+    const page = async (id) => dispatch(handler, `/api/run?id=${encodeURIComponent(id)}`);
+    const res = await page(runId);
+    assert.strictEqual(res.status, 200);
+    const detail = JSON.parse(res.body);
+    assert.strictEqual(detail.partial, false);
+    assert.deepStrictEqual(
+      [detail.run.final_hp, detail.run.max_hp, detail.run.gold, detail.run.potion_slots, detail.run.potions, detail.run.game_mode],
+      [10, 80, 123, 3, "POTION.FIRE_POTION", "standard"],
+    );
+    assert.deepStrictEqual(detail.rooms.map((r) => [r.floor, r.map_type, r.room_type]), [
+      [1, "monster", "monster"],
+      [2, "unknown", "event"],
+      [3, "boss", "boss"],
+    ]);
+    // Empty parts are left out (this test room has no cards_gained list).
+    assert.deepStrictEqual(detail.rooms[0].detail, { turns: 4, damage: 3, skipped: ["CARD.BLACK_HOLE"] });
+    assert.deepStrictEqual(detail.rooms[1].detail.choices, ["GOLDEN_PEARL.title"]);
+    assert.deepStrictEqual(detail.rooms[2].detail.potionsUsed, ["POTION.BLOCK_POTION"]);
+    assert.deepStrictEqual(detail.cards.map((c) => [c.card_id, c.upgrade, c.enchantment]), [
+      ["CARD.STRIKE_REGENT", 0, null],
+      ["CARD.RESONANCE", 1, "ENCHANTMENT.SLITHER"],
+    ]);
+    assert.deepStrictEqual(detail.importers.map((p) => p.username), ["dee"]);
+    assert.strictEqual((await page("NOPE:1")).status, 404);
+    assert.strictEqual((await dispatch(handler, "/api/run")).status, 404);
+
+    // An older run (no rooms, no ending, no enchantments) shows its fights and events, and says so.
+    await runDb.batch([
+      { sql: "DELETE FROM run_rooms", args: [] },
+      { sql: "UPDATE runs SET final_hp = NULL, gold = NULL, game_mode = NULL", args: [] },
+      { sql: "UPDATE run_cards SET enchantment = NULL", args: [] },
+    ], "write");
+    const old = JSON.parse((await page(runId)).body);
+    assert.strictEqual(old.partial, true);
+    assert.deepStrictEqual(old.rooms.map((r) => [r.floor, r.room_type, r.model_id]), [
+      [1, "monster", "ENCOUNTER.NIBBITS_WEAK"],
+      [2, "event", "EVENT.NEOW"],
+      [3, "boss", "ENCOUNTER.CEREMONIAL_BEAST_BOSS"],
+    ]);
+    assert.strictEqual(old.rooms[1].map_type, "ancient", "Neow is an Ancient");
+    // Importing it again fills everything in, without adding a second copy of the deck.
+    assert.strictEqual((await importer.importRun(run, 1)).status, "duplicate");
+    const filled = JSON.parse((await page(runId)).body);
+    assert.strictEqual(filled.partial, false);
+    assert.strictEqual(filled.rooms.length, 3);
+    assert.strictEqual(filled.run.gold, 123);
+    assert.deepStrictEqual(filled.cards.map((c) => c.enchantment), [null, "ENCHANTMENT.SLITHER"]);
+    // A later import leaves it alone (the rooms are there now).
+    assert.strictEqual((await importer.importRun(run, 1)).status, "duplicate");
+    assert.strictEqual(Number((await runDb.execute("SELECT COUNT(*) n FROM run_cards")).rows[0].n), 2);
+    await runDb.close();
   }
 
   await db.close();

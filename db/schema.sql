@@ -15,7 +15,14 @@ CREATE TABLE IF NOT EXISTS runs (
   start_time  INTEGER,               -- unix seconds
   build_id    TEXT,
   player_count INTEGER NOT NULL DEFAULT 1, -- 1 = solo, 2+ = multiplayer
-  player_id   TEXT                   -- multiplayer: the uploader's Steam id (NULL for solo)
+  player_id   TEXT,                  -- multiplayer: the uploader's Steam id (NULL for solo)
+  -- How the run ended, for the run page (NULL on runs imported before it was kept; see migration 5):
+  game_mode   TEXT,                  -- standard, daily, custom...
+  final_hp    INTEGER,
+  max_hp      INTEGER,
+  gold        INTEGER,
+  potion_slots INTEGER,
+  potions     TEXT                   -- potions held at the end, comma separated
 );
 
 CREATE TABLE IF NOT EXISTS profiles (
@@ -69,7 +76,8 @@ CREATE TABLE IF NOT EXISTS run_cards (
   run_id      TEXT NOT NULL REFERENCES runs(run_id) ON DELETE CASCADE,
   card_id     TEXT NOT NULL,
   upgrade     INTEGER NOT NULL DEFAULT 0,
-  floor_added INTEGER NOT NULL DEFAULT 0     -- 1 = starter card
+  floor_added INTEGER NOT NULL DEFAULT 0,    -- 1 = starter card
+  enchantment TEXT                           -- e.g. ENCHANTMENT.SLITHER (NULL = none, or not known)
 );
 
 -- Relics held at the end of each run.
@@ -126,6 +134,23 @@ CREATE TABLE IF NOT EXISTS fights (
   damage       INTEGER,
   hp_after     INTEGER,
   died         INTEGER NOT NULL
+);
+
+-- Every room of the map in order, for the run page (lib/run-detail.js). Floors count map points from 1,
+-- like fights.floor. detail is a small JSON object of what happened there (see roomDetail in
+-- lib/importer.js). Runs imported before this table existed have no rows until imported again.
+CREATE TABLE IF NOT EXISTS run_rooms (
+  run_id    TEXT NOT NULL REFERENCES runs(run_id) ON DELETE CASCADE,
+  floor     INTEGER NOT NULL,
+  act       INTEGER NOT NULL,
+  map_type  TEXT,                    -- what the map showed: monster, elite, boss, unknown, shop, ancient...
+  room_type TEXT,                    -- what it turned out to be: monster, event, treasure...
+  model_id  TEXT,                    -- encounter or event id
+  hp        INTEGER,                 -- after the room
+  max_hp    INTEGER,
+  gold      INTEGER,
+  detail    TEXT,
+  PRIMARY KEY (run_id, floor)
 );
 
 -- Every event room and the choice(s) made in it.

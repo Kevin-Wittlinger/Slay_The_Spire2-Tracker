@@ -80,6 +80,32 @@ also needs its two images (`img/characters/<name>.png` and `img/heads/<name>.png
   count them, whatever the switch says. An abandoned run is stored with `win = 0` even if its file says otherwise
   (`lib/importer.js`, and migration 4 for runs imported before this rule).
 
+## Run page
+
+Every row on **Recent runs** has a **Details** button (clicking the row works too) that opens the whole run, like the
+game's run history:
+
+- **Summary:** character, ascension, final HP, gold, potion slots, floors and time, plus the date, seed, game mode
+  and patch, and how the run ended.
+- **Map path:** one row of map icons per area. Bosses and Ancients get their own picture, and a `?` room shows
+  what it turned out to be. Hovering an icon gives the floor, HP and gold; clicking it jumps to that floor below.
+- **Relics and deck:** relic icons and the final deck, each with a count by rarity. Identical cards are grouped
+  ("3x Strike"), upgraded ones are green and enchanted ones purple. The usual card and relic popups work here too.
+- **Floor by floor:** HP and gold after each room, plus what happened there: turns and damage, cards taken and
+  skipped, removals, upgrades, transforms, enchantments, relics, potions, rest-site and event choices, gold.
+
+The page's link is kept in the URL (`run=<id>`), so a run can be shared. It reads `GET /api/run?id=...`
+(`lib/run-detail.js`, front end in `public/run.js`). The rooms are stored in `run_rooms`, one row per floor with a
+small JSON `detail` (built by `roomDetail` in `lib/importer.js`), and the run's ending is stored in new `runs` columns
+(migration 5).
+
+Runs imported before the run page existed show only their fights and events, with a note. Importing the run folder
+again fills in the rest (rooms, HP, gold, potions, card enchantments) and doesn't count anything twice.
+
+The map icons come from the wiki (`public/img/map/`). After a patch adds a boss or an Ancient, run
+`npm run update:map-icons` (it only downloads pictures it doesn't have yet). A missing picture just shows the plain
+boss or Ancient icon.
+
 ## Files
 
 | File               | Purpose                                                     |
@@ -92,6 +118,9 @@ also needs its two images (`img/characters/<name>.png` and `img/heads/<name>.png
 | `lib/migrations.js` | Numbered database changes, each applied once (how to add one is at the top) |
 | `public/game-data.js` | Characters, areas, Ancients, co-op cards; shared by page and server |
 | `lib/handler.js`   | Profile auth and shared API routes                          |
+| `lib/run-detail.js` | Everything the run page shows about one run (`/api/run`)   |
+| `public/run.js`    | The run page (opened from Recent runs)                      |
+| `scripts/update-map-icons.js` | `npm run update:map-icons`: map icons from the wiki into `public/img/map/` |
 | `lib/ratelimit.js` | Database-backed rate limiter                                |
 | `api/index.js`     | Vercel Function entry point                                 |
 | `server.js`        | Local development server                                    |

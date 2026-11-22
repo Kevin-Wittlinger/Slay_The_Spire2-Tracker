@@ -19,7 +19,7 @@ const { createClient } = require("@libsql/client");
 const FIX = process.argv.includes("--fix");
 const DAY = 24 * 60 * 60 * 1000;
 
-const RUN_CHILD_TABLES = ["run_cards", "run_relics", "card_choices", "run_acts", "run_players", "fights", "events"];
+const RUN_CHILD_TABLES = ["run_cards", "run_relics", "card_choices", "run_acts", "run_players", "run_rooms", "fights", "events"];
 const TABLES = [
   "runs", ...RUN_CHILD_TABLES, "profiles", "profile_runs", "profile_badges", "profile_sessions",
   "steam_names", "rate_limits", "maintenance", "schema_migrations",

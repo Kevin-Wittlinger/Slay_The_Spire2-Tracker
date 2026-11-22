@@ -10,7 +10,7 @@
     <link rel="icon" type="image/png" sizes="32x32" href="img/icon-32.png?v=1" />
     <link rel="icon" type="image/png" sizes="192x192" href="img/icon-192.png?v=1" />
     <link rel="apple-touch-icon" href="img/apple-touch-icon.png?v=1" />
-    <link rel="stylesheet" href="style.css?v=18" />
+    <link rel="stylesheet" href="style.css?v=19" />
     <script src="analytics.js"></script>
   </head>
   <body>
@@ -189,8 +189,16 @@
     <div id="dropOverlay" class="drop-overlay" hidden>
       Drop your .run files to import
     </div>
+    <!-- One run in full, opened from Recent runs (run.js). -->
+    <div id="runOverlay" class="run-overlay" hidden>
+      <div id="runDialog" class="run-dialog" role="dialog" aria-modal="true" aria-label="Run details">
+        <button id="runClose" type="button" class="run-close" aria-label="Close run details">✕</button>
+        <div id="runBody"></div>
+      </div>
+    </div>
     <script src="game-data.js?v=1"></script>
     <script src="trends.js?v=5"></script>
-    <script src="app.js?v=26"></script>
+    <script src="run.js?v=1"></script>
+    <script src="app.js?v=27"></script>
   </body>
 </html>

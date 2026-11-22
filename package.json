@@ -7,7 +7,8 @@
     "start": "node server.js",
     "test": "node test/smoke.js",
     "db:health": "node scripts/db-health.js",
-    "update:relics": "node scripts/update-relic-info.js"
+    "update:relics": "node scripts/update-relic-info.js",
+    "update:map-icons": "node scripts/update-map-icons.js"
   },
   "engines": {
     "node": "22.x"

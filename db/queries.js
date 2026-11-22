@@ -316,7 +316,9 @@ const TABS = {
              -- Abandoned mid-fight: that fight; abandoned anywhere else: no killer.
              CASE WHEN r.abandoned = 1 AND r.killed_by NOT LIKE 'ENCOUNTER.%' THEN NULL ELSE r.killed_by END AS killed_by,
              ROUND(r.run_time / 60.0, 1) AS minutes,
-             (SELECT COUNT(*) FROM fights f WHERE f.run_id = r.run_id) AS fights
+             (SELECT COUNT(*) FROM fights f WHERE f.run_id = r.run_id) AS fights,
+             -- Not shown as a column: the page uses it for the Details button (run page).
+             r.run_id
       FROM runs r
       WHERE ${FILTER} AND ${PROFILE_FILTER}
       ORDER BY r.start_time DESC
