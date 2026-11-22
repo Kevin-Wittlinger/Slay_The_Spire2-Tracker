@@ -949,29 +949,34 @@ async function renderOverview(loadId) {
   ];
   // Abandoned runs count as losses by default; the switch on this card leaves them out of every stat
   // (not achievements, which always count them).
+  // The switch sits beside the number, so this card is no taller than the others.
   const abandonedCard = el(
     "div",
     { class: "stat stat-abandoned" },
-    el("b", { text: nf.format(o.abandoned) }),
-    el("span", { text: counted ? "Abandoned (counted as losses)" : "Abandoned (not counted)" }),
     el(
-      "button",
-      {
-        type: "button",
-        class: "stat-toggle",
-        role: "switch",
-        "aria-checked": String(counted),
-        title: counted
-          ? "Abandoned runs count as losses. Click to leave them out of the stats."
-          : "Abandoned runs are left out. Click to count them as losses.",
-        onclick: () => {
-          $("fAbandoned").value = counted ? "exclude" : "";
-          refreshStats();
+      "div",
+      { class: "stat-head" },
+      el("b", { text: nf.format(o.abandoned) }),
+      el(
+        "button",
+        {
+          type: "button",
+          class: "stat-toggle",
+          role: "switch",
+          "aria-checked": String(counted),
+          "aria-label": "Count abandoned runs as losses",
+          title: counted
+            ? "Abandoned runs count as losses. Click to leave them out of the stats."
+            : "Abandoned runs are left out. Click to count them as losses.",
+          onclick: () => {
+            $("fAbandoned").value = counted ? "exclude" : "";
+            refreshStats();
+          },
         },
-      },
-      el("span", { class: "switch-track", "aria-hidden": "true" }, el("span", { class: "switch-knob" })),
-      el("span", { text: "Count as losses" }),
+        el("span", { class: "switch-track", "aria-hidden": "true" }, el("span", { class: "switch-knob" })),
+      ),
     ),
+    el("span", { text: counted ? "Abandoned (counted as losses)" : "Abandoned (not counted)" }),
   );
   $("overview").replaceChildren(
     ...items.map(([label, value]) =>
