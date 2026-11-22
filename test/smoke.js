@@ -155,8 +155,9 @@ async function main() {
       CREATE TABLE profile_badges (profile_id INTEGER, badge_id TEXT, earned_at INTEGER, characters TEXT,
         ascension INTEGER, PRIMARY KEY (profile_id, badge_id));
       INSERT INTO profiles VALUES (1, 'veteran');
-      INSERT INTO runs VALUES ('a', 'CHARACTER.IRONCLAD', 10, 1, 0, 1800, 1), ('b', 'CHARACTER.SILENT', 10, 1, 0, 1800, 2);
-      INSERT INTO profile_runs VALUES (1, 'a', 0), (1, 'b', 0);`);
+      INSERT INTO runs VALUES ('a', 'CHARACTER.IRONCLAD', 10, 1, 0, 1800, 1), ('b', 'CHARACTER.SILENT', 10, 1, 0, 1800, 2),
+        ('c', 'CHARACTER.SILENT', 10, 1, 1, 1800, 3); -- abandoned, though marked as a win
+      INSERT INTO profile_runs VALUES (1, 'a', 0), (1, 'b', 0), (1, 'c', 0);`);
     assert.deepStrictEqual(await migrate(old), MIGRATIONS.map((m) => m.version));
     const columns = async (table) => (await old.execute(`PRAGMA table_info(${table})`)).rows.map((r) => r.name);
     assert.ok((await columns("runs")).includes("player_count"));
@@ -166,6 +167,9 @@ async function main() {
     const kept = (await old.execute("SELECT badge_id, characters FROM profile_badges ORDER BY badge_id")).rows;
     assert.deepStrictEqual(kept.map((r) => r.badge_id), ["all_a10", "rotating_streak"]);
     assert.deepStrictEqual(JSON.parse(kept[0].characters).sort(), ["CHARACTER.IRONCLAD", "CHARACTER.SILENT"]);
+    // Abandoned runs are losses: an old row marked as a win is corrected, and keeps its abandoned flag.
+    const c = (await old.execute("SELECT win, abandoned FROM runs WHERE run_id = 'c'")).rows[0];
+    assert.deepStrictEqual([Number(c.win), Number(c.abandoned)], [0, 1]);
     assert.deepStrictEqual(await migrate(old), [], "nothing runs twice");
     old.close();
   }
@@ -743,49 +747,66 @@ async function main() {
     ),
   );
 
-  // Abandoned runs are stored but never counted, so every count agrees.
-  const abandoned = { ...makeRun({ seed: "ABANDONED", start: 1794700000 }), was_abandoned: true };
-  const abandonedImport = await dispatch(
-    handler,
-    "/api/import",
-    "POST",
-    [abandoned],
-    undefined,
-    aliceCookie,
-  );
+  // Abandoned runs count as losses everywhere (so quitting can't dodge a loss), even if the file
+  // says otherwise; only "Killed by" leaves them out, and Recent runs labels them.
+  const aliceOverview = async () =>
+    JSON.parse((await dispatch(handler, `/api/stats/overview?scope=profile&profileId=${aliceId}`)).body)[0];
+  const before = await aliceOverview();
+  const abandoned = { ...makeRun({ seed: "ABANDONED", start: 1794700000, win: true }), was_abandoned: true };
+  const abandonedImport = await dispatch(handler, "/api/import", "POST", [abandoned], undefined, aliceCookie);
   assert.strictEqual(JSON.parse(abandonedImport.body).abandoned, 1);
-  assert.strictEqual(
-    JSON.parse(
-      (await dispatch(handler, `/api/stats/overview?scope=profile&profileId=${aliceId}`)).body,
-    )[0].abandoned,
-    1,
-  );
+  const after = await aliceOverview();
+  assert.strictEqual(after.abandoned, 1);
+  assert.strictEqual(after.runs, before.runs + 1, "counted as a run");
+  assert.strictEqual(after.wins, before.wins, "and as a loss, though the file said win");
   assert.strictEqual(
     JSON.parse((await dispatch(handler, "/api/profiles?q=alice")).body)[0].runs,
-    1,
+    before.runs + 1,
   );
   assert.strictEqual(
-    JSON.parse(
-      (await dispatch(handler, `/api/status?scope=profile&profileId=${aliceId}`)).body,
-    ).runs,
-    1,
+    JSON.parse((await dispatch(handler, `/api/status?scope=profile&profileId=${aliceId}`)).body).runs,
+    before.runs + 1,
   );
+  const abandonedRow = (await runQuery(db, "recent_runs", { profileId: aliceId })).find((r) => r.result === "ABANDONED");
+  assert.ok(abandonedRow, "Recent runs labels it ABANDONED");
+  assert.strictEqual(abandonedRow.killed_by, null, "quitting isn't dying");
+  const deaths = async () =>
+    (await runQuery(db, "killed_by", { profileId: aliceId })).reduce((n, k) => n + k.deaths, 0);
+  const deathsBefore = await deaths();
+  assert.strictEqual(deathsBefore, after.runs - after.wins - after.abandoned, "an abandon outside a fight has no killer");
+
+  // Quitting during a fight counts as being killed by it (the game records that fight as killed_by).
+  const quitMidFight = {
+    ...makeRun({ seed: "QUIT_FIGHT", start: 1794800000 }),
+    was_abandoned: true,
+    killed_by_encounter: "ENCOUNTER.QUIT_HERE_ELITE",
+  };
+  await dispatch(handler, "/api/import", "POST", [quitMidFight], undefined, aliceCookie);
+  const killedBy = await runQuery(db, "killed_by", { profileId: aliceId });
+  assert.ok(killedBy.some((k) => k.killed_by === "ENCOUNTER.QUIT_HERE_ELITE"));
+  assert.strictEqual(await deaths(), deathsBefore + 1);
+  const quitRow = (await runQuery(db, "recent_runs", { profileId: aliceId })).find((r) => r.killed_by === "ENCOUNTER.QUIT_HERE_ELITE");
+  assert.strictEqual(quitRow.result, "ABANDONED");
+
+  // The Abandoned card's switch leaves abandons out of every stat, but the card still shows how many.
+  const counted = await aliceOverview();
+  const excluded = JSON.parse(
+    (await dispatch(handler, `/api/stats/overview?scope=profile&profileId=${aliceId}&abandoned=exclude`)).body,
+  )[0];
+  assert.strictEqual(counted.abandoned, 2);
+  assert.strictEqual(excluded.abandoned, 2, "the card shows the number either way");
+  assert.strictEqual(excluded.runs, counted.runs - 2);
+  assert.strictEqual(excluded.wins, counted.wins);
+  const recentExcluded = await runQuery(db, "recent_runs", { profileId: aliceId, abandoned: "exclude" });
+  assert.ok(recentExcluded.every((r) => r.result !== "ABANDONED"));
   assert.strictEqual(
-    JSON.parse(
-      (await dispatch(handler, `/api/stats/overview?scope=profile&profileId=${aliceId}`)).body,
-    )[0].runs,
-    1,
+    (await runQuery(db, "killed_by", { profileId: aliceId, abandoned: "exclude" })).reduce((n, k) => n + k.deaths, 0),
+    deathsBefore,
   );
+  // Anything but "exclude" counts them (the default).
   assert.strictEqual(
-    JSON.parse(
-      (
-        await dispatch(
-          handler,
-          `/api/stats/overview?scope=profile&profileId=${aliceId}`,
-        )
-      ).body,
-    )[0].runs,
-    1,
+    JSON.parse((await dispatch(handler, `/api/stats/overview?scope=profile&profileId=${aliceId}&abandoned=bogus`)).body)[0].runs,
+    counted.runs,
   );
   assert.strictEqual(
     (await dispatch(handler, "/api/stats/overview?scope=profile&profileId=9999"))
@@ -951,6 +972,36 @@ async function main() {
     assert.strictEqual(result.rotating_streak.earned, true);
     const saved = await bDb.execute({ sql: "SELECT COUNT(*) n FROM profile_badges WHERE profile_id = ?", args: [p] });
     assert.strictEqual(Number(saved.rows[0].n), 2);
+
+    // Abandoning a run that's about to be lost breaks a streak like losing it. A streak kept only by
+    // skipping abandons (the old rule) stays earned, marked outdated for that reason.
+    const q = Number(
+      (await bDb.execute("INSERT INTO profiles (username, password_salt, password_hash, created_at) VALUES ('quitter','s','h',0)")).lastInsertRowid,
+    );
+    let played = 0; // start times in the order the runs are added
+    const addRun = async (i, character, abandonedRun) =>
+      bDb.batch([
+        {
+          sql: "INSERT INTO runs (run_id, character, ascension, win, abandoned, run_time, start_time) VALUES (?,?,10,?,?,1800,?)",
+          args: [`q${i}`, character, abandonedRun ? 0 : 1, abandonedRun ? 1 : 0, ++played],
+        },
+        { sql: "INSERT INTO profile_runs (profile_id, run_id, created_at) VALUES (?,?,0)", args: [q, `q${i}`] },
+      ], "write");
+    for (const [i, character] of all.entries()) {
+      if (i === 2) await addRun(100 + i, character, true); // quit a doomed run mid-streak
+      await addRun(i, character, false);
+    }
+    result = Object.fromEntries((await profileAchievements(bDb, q)).badges.map((b) => [b.id, b]));
+    assert.strictEqual(result.all_a10.earned, true, "every character still won at A10");
+    assert.strictEqual(result.rotating_streak.earned, false, "the abandon broke the streak");
+    await bDb.execute({
+      sql: "INSERT INTO profile_badges (profile_id, badge_id, earned_at, characters, ascension) VALUES (?, 'rotating_streak', 1, ?, 10)",
+      args: [q, JSON.stringify(all)],
+    });
+    result = Object.fromEntries((await profileAchievements(bDb, q)).badges.map((b) => [b.id, b]));
+    assert.strictEqual(result.rotating_streak.earned, true, "kept");
+    assert.strictEqual(result.rotating_streak.outdated, true);
+    assert.match(result.rotating_streak.outdatedNote, /abandoned runs count as losses/);
     await bDb.close();
   }
 

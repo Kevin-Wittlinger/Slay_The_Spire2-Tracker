@@ -31,7 +31,8 @@ There is no password reset for a forgotten password, because the site doesn't st
 ## Personal achievements
 
 Signed-in players get a **Personal achievements** button next to **My profile**. It shows three badges, worked out from
-their own runs (abandoned runs don't count):
+their own solo runs. An abandoned run is a loss, so quitting a run that's about to be lost breaks a streak just like
+losing it:
 
 | Badge               | How to earn it                                                                        |
 | ------------------- | ------------------------------------------------------------------------------------- |
@@ -45,7 +46,8 @@ import can't take a badge away from everyone else. The rules are in `lib/achieve
 
 Earned badges are saved (`profile_badges`) with what they asked for at the time. If the requirement grows later, for
 example when a new character is added, players keep the badge, marked **Outdated** with a note saying what changed,
-until they earn it again under the new requirement.
+until they earn it again under the new requirement. This also covers badges earned before abandoned runs counted as
+losses: if a streak only held because abandons used to be skipped, the badge is kept and its note says so.
 
 ## Adding new game content
 
@@ -70,8 +72,13 @@ also needs its two images (`img/characters/<name>.png` and `img/heads/<name>.png
   and always links to their Steam profile when they have no site profile. Personal achievements stay solo only.
 - **No double counting.** A run is identified by seed plus start time (plus the uploader's Steam id for
   multiplayer), so repeated uploads are safe.
-- Abandoned runs are excluded from all stats and counts. They are stored, and the **Abandoned** card on the overview
-  shows how many there are, so a player's imported total can be larger than the runs shown.
+- **Abandoned runs count as losses** by default, in every stat and count, so re-rolling for a good seed or quitting a
+  run that's about to be lost costs the same as losing it. Quitting during a fight counts as being **killed by** that
+  fight (the game records it); quitting at an event or between rooms has no killer. Recent runs labels them
+  **ABANDONED**. The **Abandoned** card on the overview shows how many there are, and its **Count as losses** switch
+  leaves them out of every stat instead (kept in the page URL as `abandoned=exclude`). Personal achievements always
+  count them, whatever the switch says. An abandoned run is stored with `win = 0` even if its file says otherwise
+  (`lib/importer.js`, and migration 4 for runs imported before this rule).
 
 ## Files
 

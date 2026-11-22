@@ -531,6 +531,7 @@ const FILTER_INPUTS = {
   area: "fArea",
   source: "fSource", // relic source, only used on Relic WR
   min: "fMin",
+  abandoned: "fAbandoned", // "" = abandoned runs count as losses, "exclude" = left out (Abandoned card toggle)
 };
 
 // Multiplayer is per player: each teammate who imports a co-op run stores their own side of it, so
@@ -743,7 +744,8 @@ function buildCell(row, col, value) {
   }
   if (typeof value === "number") td.className = "num";
   if (col === "character") td.className = "char-cell";
-  if (col === "result" && (value === "WIN" || value === "LOSS"))
+  // An abandoned run is a loss, so it is coloured like one.
+  if (col === "result" && ["WIN", "LOSS", "ABANDONED"].includes(value))
     td.className = value === "WIN" ? "result-win" : "result-loss";
 
   if (/pct$/.test(col) && typeof value === "number") {
@@ -938,17 +940,44 @@ async function renderOverview(loadId) {
   const [o] = await api(`/api/stats/overview?${statsQuery()}`);
   if (loadId !== state.loadId) return;
   const runsLabel = { multi: "Multiplayer runs", all: "Solo + multiplayer runs" }[activeFilters().mode] || "Solo runs";
+  const counted = $("fAbandoned").value !== "exclude";
   const items = [
     [runsLabel, nf.format(o.runs)],
     ["Wins", nf.format(o.wins)],
     ["Win rate", `${o.win_pct}%`],
     ["Avg run length", `${o.avg_minutes} min`],
-    ["Abandoned (not counted)", nf.format(o.abandoned)],
   ];
+  // Abandoned runs count as losses by default; the switch on this card leaves them out of every stat
+  // (not achievements, which always count them).
+  const abandonedCard = el(
+    "div",
+    { class: "stat stat-abandoned" },
+    el("b", { text: nf.format(o.abandoned) }),
+    el("span", { text: counted ? "Abandoned (counted as losses)" : "Abandoned (not counted)" }),
+    el(
+      "button",
+      {
+        type: "button",
+        class: "stat-toggle",
+        role: "switch",
+        "aria-checked": String(counted),
+        title: counted
+          ? "Abandoned runs count as losses. Click to leave them out of the stats."
+          : "Abandoned runs are left out. Click to count them as losses.",
+        onclick: () => {
+          $("fAbandoned").value = counted ? "exclude" : "";
+          refreshStats();
+        },
+      },
+      el("span", { class: "switch-track", "aria-hidden": "true" }, el("span", { class: "switch-knob" })),
+      el("span", { text: "Count as losses" }),
+    ),
+  );
   $("overview").replaceChildren(
     ...items.map(([label, value]) =>
       el("div", { class: "stat" }, el("b", { text: value }), el("span", { text: label })),
     ),
+    abandonedCard,
   );
 }
 
@@ -1595,7 +1624,7 @@ async function importFiles(files) {
     await sendBatch();
     const notes = [];
     if (totals.coop) notes.push(`${totals.coop} multiplayer`);
-    if (totals.abandoned) notes.push(`${totals.abandoned} abandoned, not counted in stats`);
+    if (totals.abandoned) notes.push(`${totals.abandoned} abandoned, counted as losses`);
     const parts = [
       notes.length ? `${totals.imported} imported (${notes.join("; ")})` : `${totals.imported} imported`,
     ];

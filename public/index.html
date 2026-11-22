@@ -7,7 +7,7 @@
       name="description"
       content="Solo and multiplayer run statistics for Slay the Spire 2." />
     <title>STS2 Tracker</title>
-    <link rel="stylesheet" href="style.css?v=15" />
+    <link rel="stylesheet" href="style.css?v=16" />
     <script src="analytics.js"></script>
   </head>
   <body>
@@ -155,6 +155,8 @@
         >
         <!-- Holds the relic source choice; the visible dropdown lives in the Relic WR table toolbar. -->
         <select id="fSource" hidden aria-hidden="true"></select>
+        <!-- Holds the abandoned-runs choice; the visible toggle lives on the Abandoned card. -->
+        <input id="fAbandoned" type="hidden" value="" />
         <label
           >Min sample
           <input id="fMin" type="number" min="1" max="9999" value="1"
@@ -164,7 +166,8 @@
 
       <div class="cards" id="overview"></div>
       <p class="hint note">
-        Abandoned runs are saved but never counted in any stat.
+        Abandoned runs count as losses. Use the switch on the Abandoned card to
+        leave them out.
       </p>
       <nav id="tabs" aria-label="Statistics"></nav>
       <div id="view" aria-live="polite"></div>
@@ -183,6 +186,6 @@
     </div>
     <script src="game-data.js?v=1"></script>
     <script src="trends.js?v=5"></script>
-    <script src="app.js?v=23"></script>
+    <script src="app.js?v=25"></script>
   </body>
 </html>

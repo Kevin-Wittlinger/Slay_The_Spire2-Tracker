@@ -1,18 +1,25 @@
 // Every statistic on the site is one SQL query in this file.
 // Named parameters: @character, @ascension, @patch and @area (NULL = no filter; @source only filters Relic WR), @min (minimum sample size),
 // @mode ('solo' = solo runs only, the default; 'multi' = multiplayer runs only; 'all' = both).
-// Abandoned runs are excluded everywhere. A multiplayer run is a row per uploader, holding their own
-// character, deck, relics and room stats; run_players lists who they played with.
+// Abandoned runs count as losses by default (runs.win is always 0 for them; see lib/importer.js), so
+// quitting a run to re-roll a seed or dodge a loss costs the same as losing it. Quitting during a fight
+// counts as being killed by that fight (the game records it); quitting elsewhere has no killer.
+// @abandoned = 'exclude' leaves them out instead (the toggle on the Abandoned card).
+// A multiplayer run is a row per uploader, holding their own character, deck, relics and room stats;
+// run_players lists who they played with.
 const { rowsToObjects } = require("../lib/db");
 
 const MODE = (r) => `(@mode = 'all' OR (@mode = 'multi') = (${r}.player_count > 1))`;
-// The usual filters for runs under alias r. mode: false leaves out the solo/multiplayer filter.
-const filterFor = (r, { mode = true } = {}) => `(@character IS NULL OR ${r}.character = @character)
+// @abandoned = 'exclude' (the toggle on the Abandoned card) leaves abandoned runs out entirely.
+const ABANDONS = (r) => `(@abandoned IS NULL OR ${r}.abandoned = 0)`;
+// The usual filters for runs under alias r. mode: false leaves out the solo/multiplayer filter;
+// abandons: false ignores the abandoned toggle (to count the abandons themselves).
+const filterFor = (r, { mode = true, abandons = true } = {}) => `(@character IS NULL OR ${r}.character = @character)
   AND (@ascension IS NULL OR ${r}.ascension = @ascension)
   AND (@patch IS NULL OR ${r}.build_id = @patch)
   AND (@area IS NULL OR EXISTS (
     SELECT 1 FROM run_acts ra WHERE ra.run_id = ${r}.run_id AND ra.area = @area
-  ))${mode ? `\n  AND ${MODE(r)}` : ""}`;
+  ))${mode ? `\n  AND ${MODE(r)}` : ""}${abandons ? `\n  AND ${ABANDONS(r)}` : ""}`;
 const FILTER = filterFor("r");
 // Fights and events are further limited to the rooms that happened inside the chosen area.
 const inArea = (alias) => `(@area IS NULL OR EXISTS (
@@ -22,7 +29,7 @@ const inArea = (alias) => `(@area IS NULL OR EXISTS (
 const PROFILE_FILTER = `(@profileId IS NULL OR EXISTS (
   SELECT 1 FROM profile_runs pr WHERE pr.run_id = r.run_id AND pr.profile_id = @profileId
 ))`;
-const BASE = `r.abandoned = 0 AND ${FILTER} AND ${PROFILE_FILTER}`;
+const BASE = `${FILTER} AND ${PROFILE_FILTER}`;
 
 // Every character begins with one of these, so they say nothing about a run. Left out of relic stats.
 const { STARTING_RELIC_LIST } = require("../lib/relics");
@@ -58,8 +65,10 @@ const TABS = {
              COALESCE(SUM(r.win), 0) AS wins,
              COALESCE(ROUND(100.0 * SUM(r.win) / NULLIF(COUNT(*), 0), 1), 0) AS win_pct,
              COALESCE(ROUND(AVG(r.run_time) / 60.0, 1), 0) AS avg_minutes,
+             -- How many abandons the other filters match, whether or not they are counted, so the
+             -- Abandoned card shows the number either way.
              (SELECT COUNT(*) FROM runs r
-              WHERE r.abandoned = 1 AND ${FILTER} AND ${PROFILE_FILTER}) AS abandoned
+              WHERE r.abandoned = 1 AND ${filterFor("r", { abandons: false })} AND ${PROFILE_FILTER}) AS abandoned
       FROM runs r
       WHERE ${BASE}`,
   },
@@ -269,7 +278,10 @@ const TABS = {
           FROM fights f2
           WHERE f2.run_id = r.run_id AND f2.encounter_id = r.killed_by
         )
-      WHERE r.win = 0 AND r.killed_by IS NOT NULL AND ${BASE}
+      -- Deaths, plus runs abandoned during a fight (killed by that fight). A run abandoned at an event
+      -- or between rooms had no killer, so it isn't listed.
+      WHERE r.win = 0 AND r.killed_by IS NOT NULL
+        AND (r.abandoned = 0 OR r.killed_by LIKE 'ENCOUNTER.%') AND ${BASE}
         AND (@area IS NULL OR (f.act IS NOT NULL AND ${inArea("f")}))
       GROUP BY r.killed_by, f.type
       ORDER BY deaths DESC`,
@@ -292,19 +304,21 @@ const TABS = {
                        || '|' || (SELECT COALESCE(SUM(r2.win), 0) || '|' || COUNT(*)
                                   FROM runs r2
                                   JOIN run_players t2 ON t2.run_id = r2.run_id AND t2.player_id = t.player_id
-                                  WHERE r2.player_id = r.player_id AND r2.abandoned = 0
+                                  WHERE r2.player_id = r.player_id AND ${ABANDONS("r2")}
                                     AND (@ascension IS NULL OR r2.ascension = @ascension)
                                     AND (@patch IS NULL OR r2.build_id = @patch)),
                        ';')
               FROM run_players t
               WHERE t.run_id = r.run_id AND t.player_id <> r.player_id) AS teammates,
              r.ascension,
-             CASE r.win WHEN 1 THEN 'WIN' ELSE 'LOSS' END AS result,
-             r.killed_by,
+             -- An abandoned run counts as a loss everywhere, but is labelled as what it was.
+             CASE WHEN r.abandoned = 1 THEN 'ABANDONED' WHEN r.win = 1 THEN 'WIN' ELSE 'LOSS' END AS result,
+             -- Abandoned mid-fight: that fight; abandoned anywhere else: no killer.
+             CASE WHEN r.abandoned = 1 AND r.killed_by NOT LIKE 'ENCOUNTER.%' THEN NULL ELSE r.killed_by END AS killed_by,
              ROUND(r.run_time / 60.0, 1) AS minutes,
              (SELECT COUNT(*) FROM fights f WHERE f.run_id = r.run_id) AS fights
       FROM runs r
-      WHERE r.abandoned = 0 AND ${FILTER} AND ${PROFILE_FILTER}
+      WHERE ${FILTER} AND ${PROFILE_FILTER}
       ORDER BY r.start_time DESC
       LIMIT 100`,
   },
@@ -322,7 +336,7 @@ const TABS = {
              datetime(MAX(r.start_time), 'unixepoch', 'localtime') AS last_played
       FROM run_players t
       JOIN runs r ON r.run_id = t.run_id
-      WHERE t.player_id <> r.player_id AND r.abandoned = 0
+      WHERE t.player_id <> r.player_id
         AND ${filterFor("r", { mode: false })} AND ${PROFILE_FILTER}
       GROUP BY t.player_id
       HAVING runs >= @min
