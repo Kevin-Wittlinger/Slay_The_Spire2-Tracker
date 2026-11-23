@@ -80,7 +80,8 @@ const TABS = {
              COUNT(*) AS runs,
              SUM(r.win) AS wins,
              ROUND(100.0 * SUM(r.win) / COUNT(*), 1) AS win_pct,
-             MAX(r.ascension) AS max_ascension
+             -- Highest ascension actually won; losses and abandoned runs at a high level don't count.
+             MAX(CASE WHEN r.win = 1 THEN r.ascension END) AS max_ascension
       FROM runs r
       WHERE ${BASE}
       GROUP BY r.character

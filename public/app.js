@@ -24,7 +24,7 @@ const COLUMN_LABELS = {
   run_win_pct: "Run win %",
   avg_damage_taken: "Avg damage",
   avg_turns: "Avg turns",
-  max_ascension: "Max ascension",
+  max_ascension: "Highest win",
   killed_by: "Killed by",
   fights: "Fights",
   run_wins: "Run wins",
