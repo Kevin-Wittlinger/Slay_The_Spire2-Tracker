@@ -105,11 +105,12 @@ function createResponse() {
   };
 }
 
-async function dispatch(handler, url, method = "GET", body, token, cookie) {
+async function dispatch(handler, url, method = "GET", body, token, cookie, ip) {
   const chunks = body === undefined ? [] : [Buffer.from(JSON.stringify(body))];
   const req = Readable.from(chunks);
   req.url = url;
   req.method = method;
+  if (ip) req.socket = { remoteAddress: ip };
   req.headers = {
     ...(token ? { authorization: `Bearer ${token}` } : {}),
     ...(cookie ? { cookie } : {}),
@@ -618,14 +619,14 @@ async function main() {
     (
       await dispatch(handler, "/api/register", "POST", {
         username: "short-password",
-        password: "abcd",
+        password: "abcdefg", // 7: new passwords need 8
       })
     ).status,
     400,
   );
   const registered = await dispatch(handler, "/api/register", "POST", {
     username: "alice",
-    password: "abcde",
+    password: "abcdefgh",
   });
   assert.strictEqual(registered.status, 200);
   const aliceCookie = registered.headers["Set-Cookie"].split(";")[0];
@@ -685,10 +686,7 @@ async function main() {
     )[0].runs,
     1,
   );
-  assert.strictEqual(
-    (await importer.importRun(makeRun({ seed: "D" }), profileId)).status,
-    "imported",
-  );
+  // Alice's run can't be added to another profile (its id is public, so anyone could forge the file).
   assert.strictEqual(
     (await importer.importRun(makeRun({ seed: "D" }), profileId)).status,
     "duplicate",
@@ -697,7 +695,7 @@ async function main() {
   assert.strictEqual(JSON.parse(status.body).runs, 3);
   assert.strictEqual(
     (await runQuery(db, "overview", { profileId }))[0].runs,
-    3,
+    2,
   );
   assert.strictEqual(
     (await dispatch(handler, "/api/sql", "POST", { sql: "SELECT * FROM runs" }))
@@ -715,6 +713,16 @@ async function main() {
     assert.ok(dump.profiles.length >= 1);
     assert.ok(dump.profiles.every((p) => !("password_hash" in p) && !("password_salt" in p)));
     assert.ok(!("profile_sessions" in dump));
+  }
+  // The admin SQL endpoint never shows password hashes or sessions, even with the key.
+  {
+    const sql = (query) => dispatch(handler, "/api/sql", "POST", { sql: query }, "smoke-test-token");
+    assert.strictEqual((await sql("SELECT password_hash FROM profiles")).status, 400);
+    assert.strictEqual((await sql("SELECT * FROM profile_sessions")).status, 400);
+    const everything = await sql("SELECT * FROM profiles");
+    assert.strictEqual(everything.status, 200);
+    const rows = JSON.parse(everything.body);
+    assert.ok(rows.length && rows.every((p) => p.username && !("password_hash" in p) && !("password_salt" in p)));
   }
 
   // Profile search and viewing another player's public stats.
@@ -836,7 +844,7 @@ async function main() {
   }
   const locked = await dispatch(handler, "/api/login", "POST", {
     username: "alice",
-    password: "abcde",
+    password: "abcdefgh",
   });
   assert.strictEqual(locked.status, 429);
   assert(Number(locked.headers["Retry-After"]) > 0);
@@ -844,7 +852,7 @@ async function main() {
   // A successful sign-in clears the failure counter.
   await dispatch(handler, "/api/register", "POST", {
     username: "carol",
-    password: "abcde",
+    password: "abcdefgh",
   });
   for (let i = 0; i < 5; i++) {
     await dispatch(handler, "/api/login", "POST", {
@@ -856,7 +864,7 @@ async function main() {
     (
       await dispatch(handler, "/api/login", "POST", {
         username: "carol",
-        password: "abcde",
+        password: "abcdefgh",
       })
     ).status,
     200,
@@ -871,7 +879,7 @@ async function main() {
     (
       await dispatch(handler, "/api/login", "POST", {
         username: "carol",
-        password: "abcde",
+        password: "abcdefgh",
       })
     ).status,
     200,
@@ -1043,7 +1051,7 @@ async function main() {
         }
       return run;
     };
-    const register = await dispatch(mpApi, "/api/register", "POST", { username: "duo", password: "abcde" });
+    const register = await dispatch(mpApi, "/api/register", "POST", { username: "duo", password: "abcdefgh" });
     const cookie = register.headers["Set-Cookie"].split(";")[0];
     const imports = async (body) =>
       JSON.parse((await dispatch(mpApi, "/api/import", "POST", body, undefined, cookie)).body);
@@ -1135,7 +1143,7 @@ async function main() {
     lastStatus = (
       await dispatch(handler, "/api/register", "POST", {
         username: `bulk${i}`,
-        password: "abcde",
+        password: "abcdefgh",
       })
     ).status;
   }
@@ -1152,7 +1160,11 @@ async function main() {
     const carol = cookieOf(await register("carol"));
     const importAs = (cookie, runs) => dispatch(acc, "/api/import", "POST", runs, undefined, cookie);
     await importAs(bob, [makeRun({ seed: "BOB_ONLY" }), makeRun({ seed: "SHARED" })]);
-    await importAs(carol, [makeRun({ seed: "SHARED" })]);
+    // Carol can't add bob's run by importing it; a run shared from before that rule is linked directly.
+    assert.strictEqual(JSON.parse((await importAs(carol, [makeRun({ seed: "SHARED" })])).body).duplicate, 1);
+    await accDb.execute(
+      "INSERT INTO profile_runs (profile_id, run_id, created_at) SELECT profile_id, (SELECT run_id FROM runs WHERE seed = 'SHARED'), 0 FROM profiles WHERE username = 'carol'",
+    );
     const post = (path, body, cookie) => dispatch(acc, path, "POST", body, undefined, cookie);
     const whoAmI = async (cookie) =>
       JSON.parse((await dispatch(acc, "/api/me", "GET", undefined, undefined, cookie)).body).profile;
@@ -1181,6 +1193,106 @@ async function main() {
     assert.strictEqual(await count("SELECT COUNT(*) n FROM profile_runs"), 1, "only carol's link is left");
     assert.strictEqual((await whoAmI(carol)).username, "carol");
     await accDb.close();
+  }
+
+  // Security: a forged file can't claim or change someone else's run, broken files are refused, a
+  // Steam id can't be taken from another profile, failed sign-ins can't lock a player out from
+  // elsewhere, and a profile can only hold so many runs.
+  {
+    const secDb = await openDb(":memory:");
+    const sec = createHandler(secDb);
+    const signUp = async (username) =>
+      (await dispatch(sec, "/api/register", "POST", { username, password: "long-enough" })).headers["Set-Cookie"].split(";")[0];
+    const victim = await signUp("victim");
+    const thief = await signUp("thief");
+    const importAs = async (cookie, body) =>
+      JSON.parse((await dispatch(sec, "/api/import", "POST", body, undefined, cookie)).body);
+    const snapshot = async () => {
+      const rows = {};
+      for (const table of ["runs", "run_acts", "run_cards", "run_relics", "run_rooms", "run_players"])
+        rows[table] = (await secDb.execute(`SELECT * FROM ${table} ORDER BY 1, 2`)).rows.map((r) => JSON.stringify(r));
+      return rows;
+    };
+
+    // An older run with no run page yet: the case a re-import used to fill in (rooms, deck, ending).
+    assert.strictEqual((await importAs(victim, [makeRun({ seed: "VICTIMWIN", win: true })])).imported, 1);
+    await secDb.batch(["DELETE FROM run_rooms", "UPDATE runs SET game_mode = NULL"], "write");
+    const before = await snapshot();
+    const forged = makeRun({ seed: "VICTIMWIN", win: true, character: "CHARACTER.SILENT" });
+    forged.players[0].deck = [{ id: "CARD.FORGED", floor_added_to_deck: 1 }];
+    forged.players[0].relics = [{ id: "RELIC.FORGED", floor_added_to_deck: 3 }];
+    forged.map_point_history.push(forged.map_point_history[0]);
+    const attempt = await importAs(thief, [forged]);
+    assert.strictEqual(attempt.duplicate, 1);
+    assert.strictEqual(attempt.imported, 0);
+    assert.deepStrictEqual(await snapshot(), before, "the victim's run is unchanged");
+    const thiefRuns = await secDb.execute(
+      "SELECT COUNT(*) n FROM profile_runs pr JOIN profiles p USING (profile_id) WHERE p.username = 'thief'",
+    );
+    assert.strictEqual(Number(thiefRuns.rows[0].n), 0, "the win isn't added to the thief's profile");
+    // The owner can still fill in their own older run.
+    await importAs(victim, [makeRun({ seed: "VICTIMWIN", win: true })]);
+    assert.ok(Number((await secDb.execute("SELECT COUNT(*) n FROM run_rooms")).rows[0].n) > 0);
+
+    // Files no game would write are refused.
+    const broken = [
+      { ...makeRun({ seed: "ASC" }), ascension: 99 },
+      { ...makeRun({ seed: "NEG" }), ascension: -1 },
+      makeRun({ seed: "FUTURE", start: Math.floor(Date.now() / 1000) + 30 * 86400 }),
+      makeRun({ seed: "ANCIENT", start: 1000 }),
+      { ...makeRun({ seed: "SLOW" }), run_time: 30 * 86400 },
+      makeRun({ seed: "ODD", character: "<img src=x>" }),
+      makeRun({ seed: "bad seed!" }),
+      { ...makeRun({ seed: "HUGE" }), players: Array.from({ length: 9 }, () => makeRun({ seed: "x" }).players[0]) },
+    ];
+    broken[7].players.forEach((p, i) => (p.id = `7656119800000${String(i).padStart(4, "0")}`));
+    assert.strictEqual((await importAs(thief, broken)).invalid, broken.length);
+
+    // A Steam id already on one profile can't be claimed by another through the folder path.
+    const STEAM = "76561198000000042";
+    const coopRun = (seed) => {
+      const run = makeRun({ seed, players: 2 });
+      run.players = [
+        { ...run.players[0], id: STEAM },
+        { ...run.players[1], id: "76561198000000043" },
+      ];
+      return run;
+    };
+    assert.strictEqual((await importAs(victim, { runs: [coopRun("CO1")], playerId: STEAM })).imported, 1);
+    assert.strictEqual((await importAs(thief, { runs: [coopRun("CO2")], playerId: STEAM })).multiplayer, 1);
+    // Teammates who both import the same co-op run each get it: every player's copy has its own id.
+    const mate = await signUp("teammate");
+    assert.strictEqual((await importAs(mate, { runs: [coopRun("CO1")], playerId: "76561198000000043" })).imported, 1);
+    const coRows = await secDb.execute(
+      "SELECT pr.run_id, p.username FROM profile_runs pr JOIN profiles p USING (profile_id) WHERE pr.run_id LIKE 'CO1:%' ORDER BY 2",
+    );
+    assert.deepStrictEqual(
+      coRows.rows.map((r) => [r.username, r.run_id.split(":")[2]]),
+      [["teammate", "76561198000000043"], ["victim", STEAM]],
+    );
+    const steamIds = await secDb.execute("SELECT username, steam_id FROM profiles ORDER BY username");
+    assert.deepStrictEqual(
+      steamIds.rows.map((r) => [r.username, r.steam_id]),
+      [["teammate", "76561198000000043"], ["thief", null], ["victim", STEAM]],
+    );
+
+    // Failing sign-ins from one network locks only that network out of the account.
+    const login = (password, ip) => dispatch(sec, "/api/login", "POST", { username: "victim", password }, undefined, undefined, ip);
+    for (let i = 0; i < 8; i++) assert.strictEqual((await login("wrong-guess", "10.0.0.66")).status, 401);
+    assert.strictEqual((await login("long-enough", "10.0.0.66")).status, 429);
+    assert.strictEqual((await login("long-enough", "10.0.0.7")).status, 200, "the real player still gets in");
+
+    // A profile that is full can't import more. (The filler links point at no real run.)
+    await secDb.execute("PRAGMA foreign_keys = OFF");
+    await secDb.execute(`
+      WITH RECURSIVE n(i) AS (SELECT 1 UNION ALL SELECT i + 1 FROM n WHERE i < 20000)
+      INSERT INTO profile_runs (profile_id, run_id, created_at)
+      SELECT (SELECT profile_id FROM profiles WHERE username = 'thief'), 'filler' || i, 0 FROM n`);
+    assert.strictEqual(
+      (await dispatch(sec, "/api/import", "POST", [makeRun({ seed: "ONEMORE" })], undefined, thief)).status,
+      403,
+    );
+    await secDb.close();
   }
 
   // The run page (GET /api/run): every room in order with what happened, how the run ended, the deck
