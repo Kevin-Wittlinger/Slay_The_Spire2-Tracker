@@ -31,7 +31,10 @@ There is no password reset for a forgotten password, because the site doesn't st
 ## Personal achievements
 
 Signed-in players get a **Personal achievements** button next to **My profile**. It shows three badges, worked out from
-their own solo runs. An abandoned run is a loss, so quitting a run that's about to be lost breaks a streak just like
+their own solo runs. Anyone can see another player's badges too: open their profile (search for them, or click their
+name) and use the **<name>'s achievements** button, signed in or not. The link is kept in the URL
+(`#view=achievements:<id>:<name>`) and `GET /api/achievements?scope=profile&profileId=<id>` is cached like their
+statistics. An abandoned run is a loss, so quitting a run that's about to be lost breaks a streak just like
 losing it:
 
 | Badge               | How to earn it                                                                        |

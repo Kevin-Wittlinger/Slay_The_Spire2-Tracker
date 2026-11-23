@@ -579,7 +579,10 @@ function viewToken() {
 }
 
 function writeHash() {
-  if (state.page === "achievements") return history.replaceState(null, "", "#view=achievements");
+  if (state.page === "achievements") {
+    const other = otherProfile(); // someone else's badges carry their id, like the stats view does
+    return history.replaceState(null, "", `#view=achievements${other ? `:${other.id}:${other.username}` : ""}`);
+  }
   const params = new URLSearchParams({ tab: state.tab, view: viewToken(), ...activeFilters() });
   if (trendsState.mode === "split") params.set("trend", "split");
   if (runPage.id) params.set("run", runPage.id); // an open run page (run.js)
@@ -601,8 +604,10 @@ function readHash() {
     };
   } else if (view === "me") {
     initial.view = { scope: "me" };
-  } else if (view === "achievements") {
+  } else if (/^achievements(?::\d+:[\w-]{1,24})?$/.test(view)) {
     initial.page = "achievements";
+    const who = view.match(/^achievements:(\d+):([\w-]{1,24})$/);
+    if (who) initial.view = { scope: "profile", profile: { id: Number(who[1]), username: who[2] } };
   }
   for (const key of Object.keys(FILTER_INPUTS)) {
     if (params.get(key)) initial.filters[key] = params.get(key);
@@ -1239,13 +1244,19 @@ function renderScope() {
   $("globalScope").setAttribute("aria-pressed", String(scope === "global" && !onAchievements));
   $("profileScope").hidden = !state.me;
   $("profileScope").setAttribute("aria-pressed", String(viewingMe));
-  $("achievementsScope").hidden = !state.me;
+  // Badges can be viewed for my own profile and for anyone else's.
+  $("achievementsScope").hidden = !state.me && !viewingOther;
   $("achievementsScope").setAttribute("aria-pressed", String(onAchievements));
   $("statsPage").hidden = onAchievements;
   $("achievementsPage").hidden = !onAchievements;
   $("otherScope").hidden = !viewingOther;
-  if (viewingOther) $("otherScope").textContent = `${profile.username} ✕`;
-  $("otherScope").title = "Back to everyone";
+  if (viewingOther) {
+    // On their badges the chip goes back to their stats; on their stats it goes back to everyone.
+    $("otherScope").textContent = onAchievements ? profile.username : `${profile.username} ✕`;
+    $("otherScope").title = onAchievements ? `Back to ${profile.username}'s stats` : "Back to everyone";
+    $("otherScope").setAttribute("aria-pressed", String(!onAchievements));
+  }
+  $("achievementsScope").textContent = viewingOther ? `${profile.username}'s achievements` : "Personal achievements";
 
   // Mode filter and Teammates tab only on a profile. Leaving the Teammates tab for Everyone goes to
   // the first tab instead.
@@ -1407,8 +1418,17 @@ function badgeCard(badge, allCharacters) {
   return card;
 }
 
+// The player whose profile is open when it isn't the signed-in one (null on Everyone and on my own).
+const otherProfile = () => {
+  const { scope, profile } = state.view;
+  return scope === "profile" && profile && profile.id !== state.me?.id ? profile : null;
+};
+
+// Badges of the player being viewed: someone else's profile when one is open, otherwise my own.
 async function showAchievements() {
-  if (!state.me) return setView("global");
+  const other = otherProfile();
+  if (!other && !state.me) return setView("global");
+  if (!other) state.view = { scope: "profile", profile: state.me };
   state.page = "achievements";
   state.loadId++; // drop any stats still loading
   renderScope();
@@ -1416,13 +1436,13 @@ async function showAchievements() {
   const page = $("achievementsPage");
   page.replaceChildren(el("div", { class: "empty", text: "Loading achievements..." }));
   try {
-    const data = await api("/api/achievements?scope=profile");
+    const data = await api(`/api/achievements?scope=profile${other ? `&profileId=${other.id}` : ""}`);
     if (state.page !== "achievements") return;
     const earned = data.badges.filter((b) => b.earned).length;
     updateStatus().catch(() => {});
     page.replaceChildren(
       el("h2", { class: "achievements-title", text: `${data.profile.username}'s achievements` }),
-      el("p", { class: "hint", text: `${earned} of ${data.badges.length} earned. Abandoned runs don't count.` }),
+      el("p", { class: "hint", text: `${earned} of ${data.badges.length} earned. Abandoned runs count as losses.` }),
       el("div", { class: "badges" }, ...data.badges.map((badge) => badgeCard(badge, data.characters))),
     );
   } catch (error) {
@@ -1695,7 +1715,9 @@ function wireEvents() {
   $("globalScope").addEventListener("click", () => setView("global"));
   $("profileScope").addEventListener("click", () => setView("me"));
   $("achievementsScope").addEventListener("click", showAchievements);
-  $("otherScope").addEventListener("click", () => setView("global"));
+  $("otherScope").addEventListener("click", () =>
+    state.page === "achievements" && otherProfile() ? setView("other", otherProfile()) : setView("global"),
+  );
   $("signInButton").addEventListener("click", () => openAccountPanel("login"));
   $("createProfileButton").addEventListener("click", () =>
     openAccountPanel("register"),
@@ -1822,9 +1844,10 @@ async function main() {
   for (const [name, value] of Object.entries(initial.filters)) $(FILTER_INPUTS[name]).value = value;
   if (!$("fMin").value) $("fMin").value = 1;
   if (initial.filters.character) renderCharacterPicker();
-  if (initial.page === "achievements" && state.me) {
-    // The stats underneath load when the player goes back (through setView).
-    state.view = { scope: "profile", profile: state.me };
+  if (initial.page === "achievements" && (state.me || initial.view?.scope === "profile")) {
+    // The stats underneath load when the player goes back (through setView). With no player named in
+    // the link these are my own badges (showAchievements sets the view); otherwise state.view is already
+    // the other player.
     return showAchievements();
   }
   if (initial.run) openRun(initial.run);

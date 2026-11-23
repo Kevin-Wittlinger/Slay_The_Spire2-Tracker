@@ -935,6 +935,14 @@ async function main() {
       GAME_DATA.characters.map((c) => `CHARACTER.${c.id}`),
     );
     assert.strictEqual((await dispatch(handler, "/api/achievements")).status, 400);
+    // Anyone can look at a player's badges by profile id, signed in or not (they are shared like the
+    // player's statistics, so the shared cache may keep them), but not at one that doesn't exist.
+    const theirs = await dispatch(handler, `/api/achievements?scope=profile&profileId=${body.profile.id}`);
+    assert.strictEqual(theirs.status, 200);
+    assert.deepStrictEqual(JSON.parse(theirs.body), body);
+    assert.match(theirs.headers["Cache-Control"], /s-maxage/);
+    assert.ok(!/s-maxage/.test(mine.headers["Cache-Control"]), "my own badges depend on who is signed in");
+    assert.strictEqual((await dispatch(handler, "/api/achievements?scope=profile&profileId=99999")).status, 404);
   }
 
   // Earned badges are kept when the requirement grows, marked outdated; earning it again clears that.
