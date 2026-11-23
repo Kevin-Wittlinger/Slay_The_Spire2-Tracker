@@ -551,6 +551,15 @@ const FILTER_INPUTS = {
 // one player. The Mode filter and Teammates tab therefore only exist while viewing a profile.
 const MULTIPLAYER_TABS = new Set(["teammates"]);
 const multiplayerAllowed = () => state.view.scope === "profile";
+// The Teammates tab also needs the Mode filter on Multiplayer or Solo + multiplayer.
+const tabAllowed = (tab) => !MULTIPLAYER_TABS.has(tab.id) || (multiplayerAllowed() && Boolean($("fMode").value));
+// If the open tab was hidden (scope or Mode changed), go to the first tab that is still shown.
+function fixTab() {
+  if (state.tab && state.tabs.some((tab) => tab.id === state.tab && !tabAllowed(tab))) {
+    state.tab = state.tabs.find(tabAllowed)?.id;
+    tableMemory = null;
+  }
+}
 
 // The filters that apply right now, empty ones left out.
 // allCharacters: leave the character out (the Trends play-rate chart always compares them).
@@ -1212,15 +1221,13 @@ function setTab(id) {
   if (!state.tabs.some((tab) => tab.id === id)) return;
   state.tab = id;
   tableMemory = null;
-  // Teammates are multiplayer-only; switch Mode so the cards above describe the same runs.
-  if (id === "teammates" && !$("fMode").value) $("fMode").value = "multi";
   renderTabs();
   refreshStats();
   $("tabs").scrollIntoView({ block: "nearest" });
 }
 
 function renderTabs() {
-  const tabs = state.tabs.filter((tab) => multiplayerAllowed() || !MULTIPLAYER_TABS.has(tab.id));
+  const tabs = state.tabs.filter(tabAllowed);
   $("tabs").replaceChildren(
     ...tabs.map((tab) =>
       el("button", {
@@ -1261,10 +1268,7 @@ function renderScope() {
   // Mode filter and Teammates tab only on a profile. Leaving the Teammates tab for Everyone goes to
   // the first tab instead.
   $("modeFilter").hidden = !multiplayerAllowed();
-  if (!multiplayerAllowed() && MULTIPLAYER_TABS.has(state.tab)) {
-    state.tab = state.tabs.find((tab) => !MULTIPLAYER_TABS.has(tab.id))?.id;
-    tableMemory = null;
-  }
+  fixTab();
   if (state.tabs.length) renderTabs();
 
   $("signInButton").hidden = Boolean(state.me);
@@ -1708,6 +1712,8 @@ function resetFilters() {
   for (const id of Object.values(FILTER_INPUTS)) $(id).value = "";
   $("fMin").value = 1;
   renderCharacterPicker();
+  fixTab();
+  if (state.tabs.length) renderTabs();
   refreshStats();
 }
 
@@ -1738,7 +1744,11 @@ function wireEvents() {
   setupCardPreview();
   wireRunPage();
   const onFilter = () => refreshStats();
-  $("fMode").addEventListener("change", onFilter);
+  $("fMode").addEventListener("change", () => {
+    fixTab();
+    if (state.tabs.length) renderTabs();
+    refreshStats();
+  });
   $("fAsc").addEventListener("change", onFilter);
   $("fPatch").addEventListener("change", onFilter);
   $("fArea").addEventListener("change", onFilter);
@@ -1844,6 +1854,8 @@ async function main() {
   for (const [name, value] of Object.entries(initial.filters)) $(FILTER_INPUTS[name]).value = value;
   if (!$("fMin").value) $("fMin").value = 1;
   if (initial.filters.character) renderCharacterPicker();
+  fixTab();
+  renderTabs();
   if (initial.page === "achievements" && (state.me || initial.view?.scope === "profile")) {
     // The stats underneath load when the player goes back (through setView). With no player named in
     // the link these are my own badges (showAchievements sets the view); otherwise state.view is already
