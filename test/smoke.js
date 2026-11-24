@@ -160,6 +160,21 @@ async function main() {
         ('c', 'CHARACTER.SILENT', 10, 1, 1, 1800, 3); -- abandoned, though marked as a win
       INSERT INTO profile_runs VALUES (1, 'a', 0), (1, 'b', 0), (1, 'c', 0);`);
     assert.deepStrictEqual(await migrate(old), MIGRATIONS.map((m) => m.version));
+    // Card offers get their act (migration 6): from the fight on that floor, else the run page's room.
+    {
+      const offers = createClient({ url: ":memory:" });
+      await offers.executeMultiple(`
+        CREATE TABLE card_choices (run_id TEXT, floor INTEGER, source TEXT, card_id TEXT, picked INTEGER);
+        CREATE TABLE fights (run_id TEXT, floor INTEGER, act INTEGER);
+        CREATE TABLE run_rooms (run_id TEXT, floor INTEGER, act INTEGER);
+        INSERT INTO card_choices VALUES ('a', 3, 'monster', 'CARD.X', 1), ('a', 20, 'shop', 'CARD.Y', 0), ('a', 40, 'boss', 'CARD.Z', 0);
+        INSERT INTO fights VALUES ('a', 3, 1);
+        INSERT INTO run_rooms VALUES ('a', 20, 2);`);
+      await MIGRATIONS.find((m) => m.version === 6).up(offers);
+      const acts = (await offers.execute("SELECT act FROM card_choices ORDER BY floor")).rows.map((r) => r.act);
+      assert.deepStrictEqual(acts, [1, 2, null], "a floor with no fight or room stays unknown");
+      offers.close();
+    }
     const columns = async (table) => (await old.execute(`PRAGMA table_info(${table})`)).rows.map((r) => r.name);
     assert.ok((await columns("runs")).includes("player_count"));
     assert.ok((await columns("profiles")).includes("steam_id"));
@@ -368,6 +383,28 @@ async function main() {
     "Hive",
     "Glory",
   ]);
+  // Card pick rate by area: a reward counts for the area its fight was in (same floor), not for the
+  // whole run. O's floor 1 is Overgrowth, floor 2 Hive, floor 3 Glory.
+  await areaDb.batch(
+    [1, 2, 3].map((floor) => ({
+      sql: "INSERT INTO card_choices (run_id, floor, act, source, card_id, picked) SELECT run_id, ?, ?, 'monster', 'CARD.AREA_TEST', ? FROM runs WHERE seed = 'O'",
+      args: [floor, floor, floor === 1 ? 1 : 0],
+    })),
+    "write",
+  );
+  const pickRow = async (area) =>
+    (await runQuery(areaDb, "card_pick_rate", { area })).find((r) => r.card === "CARD.AREA_TEST");
+  assert.deepStrictEqual(
+    [(await pickRow(null)).offered, (await pickRow(null)).picked],
+    [3, 1],
+  );
+  assert.deepStrictEqual(
+    [(await pickRow("OVERGROWTH")).offered, (await pickRow("OVERGROWTH")).picked],
+    [1, 1],
+  );
+  assert.strictEqual((await pickRow("HIVE")).offered, 1);
+  assert.strictEqual((await pickRow("HIVE")).picked, 0);
+  assert.strictEqual(await pickRow("UNDERDOCKS"), undefined, "no run through Underdocks was offered it");
   // Backfill: runs imported before areas existed get them from what the learned enemies say.
   // V is an Overgrowth run (PLANT is known from O); W only fought an enemy nobody has tagged.
   const { backfillAreas } = require("../lib/areas");

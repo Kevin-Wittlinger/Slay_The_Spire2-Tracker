@@ -92,6 +92,7 @@ CREATE TABLE IF NOT EXISTS run_relics (
 CREATE TABLE IF NOT EXISTS card_choices (
   run_id   TEXT NOT NULL REFERENCES runs(run_id) ON DELETE CASCADE,
   floor    INTEGER NOT NULL,
+  act      INTEGER,                  -- 1-based, like fights.act (filled in for older rows by migration 6)
   source   TEXT NOT NULL,            -- map point type: monster, elite, boss, shop...
   card_id  TEXT NOT NULL,
   picked   INTEGER NOT NULL

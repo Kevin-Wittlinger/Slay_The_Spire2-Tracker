@@ -18,13 +18,15 @@ const filterFor = (r, { mode = true, abandons = true } = {}) => `(@character IS 
   AND (@ascension IS NULL OR ${r}.ascension = @ascension)
   AND (@patch IS NULL OR ${r}.build_id = @patch)
   AND (@area IS NULL OR EXISTS (
-    SELECT 1 FROM run_acts ra WHERE ra.run_id = ${r}.run_id AND ra.area = @area
+    -- The unary + keeps SQLite on the (run_id, act) key: left alone it walks the whole area index once
+    -- per row, which made every area-filtered tab slow.
+    SELECT 1 FROM run_acts ra WHERE ra.run_id = ${r}.run_id AND +ra.area = @area
   ))${mode ? `\n  AND ${MODE(r)}` : ""}${abandons ? `\n  AND ${ABANDONS(r)}` : ""}`;
 const FILTER = filterFor("r");
 // Fights and events are further limited to the rooms that happened inside the chosen area.
 const inArea = (alias) => `(@area IS NULL OR EXISTS (
   SELECT 1 FROM run_acts ra
-  WHERE ra.run_id = ${alias}.run_id AND ra.act = ${alias}.act AND ra.area = @area
+  WHERE ra.run_id = ${alias}.run_id AND ra.act = ${alias}.act AND +ra.area = @area
 ))`;
 const PROFILE_FILTER = `(@profileId IS NULL OR EXISTS (
   SELECT 1 FROM profile_runs pr WHERE pr.run_id = r.run_id AND pr.profile_id = @profileId
@@ -125,7 +127,8 @@ const TABS = {
 
   card_pick_rate: {
     title: "Card pick rate",
-    // Only combat rewards (monster / elite / boss), not shop stock.
+    // Only combat rewards (monster / elite / boss), not shop stock. With an area chosen, only the
+    // rewards offered inside that area (card_choices.act, like fights).
     sql: `
       SELECT cc.card_id AS card,
              COUNT(*) AS offered,
@@ -133,7 +136,7 @@ const TABS = {
              ROUND(100.0 * SUM(cc.picked) / COUNT(*), 1) AS pick_pct
       FROM card_choices cc
       JOIN runs r ON r.run_id = cc.run_id
-      WHERE cc.source IN ('monster', 'elite', 'boss') AND ${BASE}
+      WHERE cc.source IN ('monster', 'elite', 'boss') AND ${BASE} AND ${inArea("cc")}
       GROUP BY cc.card_id
       HAVING offered >= @min
       ORDER BY pick_pct DESC, offered DESC`,
