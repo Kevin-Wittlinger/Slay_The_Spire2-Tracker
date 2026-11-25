@@ -56,10 +56,13 @@ function encounterName(id) {
   return `${titleCase(match[1])}${strength}`;
 }
 
-// "TRASH_HEAP.pages.INITIAL.options.DIVE_IN.title" -> "Dive In"; "PANDORAS_BOX.title" -> "Pandoras Box"
+// "TRASH_HEAP.pages.INITIAL.options.DIVE_IN.title" -> "Dive In"; "PANDORAS_BOX.title" -> "Pandoras Box".
+// Stored keys are cut at 64 characters, so the ".title" ending may be partly missing. Step numbers on
+// repeated options ("REACH_DEEPER_2") are dropped, so each click reads "Reach Deeper".
 function choiceName(key) {
-  const match = String(key).match(/options\.([A-Z0-9_]+)\.title$/) || String(key).match(/^([A-Z0-9_]+)\.title$/);
-  return match ? titleCase(match[1]) : pretty(key);
+  const s = String(key);
+  const match = s.match(/options\.([A-Z0-9_]+)(?:\.[a-z]*)?$/) || s.match(/^([A-Z0-9_]+)\.[a-z]*$/);
+  return match ? titleCase(match[1].replace(/_\d+$/, "")) : pretty(key);
 }
 
 const roomKind = (room) => (room.map_type === "unknown" ? room.room_type : room.map_type) || room.room_type;
