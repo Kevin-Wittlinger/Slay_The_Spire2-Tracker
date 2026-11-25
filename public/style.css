@@ -1139,6 +1139,15 @@ body.run-open {
 }
 .run-result.loss {
   color: var(--bad);
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.result-monster {
+  width: 48px;
+  height: 48px;
+  object-fit: contain; /* monster art comes in all shapes */
+  flex: none;
 }
 .run-potions {
   grid-column: 1 / -1;
@@ -1280,6 +1289,12 @@ body.run-open {
   width: 24px;
   height: 24px;
   object-fit: contain;
+}
+.log-room img.log-monster {
+  width: 36px;
+  height: 36px;
+  margin: -6px 0; /* taller than the text; don't stretch the row */
+  flex: none;
 }
 .log-line + .log-line {
   margin-top: 2px;

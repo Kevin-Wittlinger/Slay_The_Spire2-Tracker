@@ -92,6 +92,16 @@ function mapIcon(room) {
   return img;
 }
 
+// The enemy's picture (the same ones as the Enemies tab, img/monsters/), or null for anything else.
+// A missing picture just disappears.
+function monsterPic(id, cls = "log-monster") {
+  const match = typeof id === "string" && id.match(/^ENCOUNTER\.([A-Z0-9_]+?)(?:_(?:NORMAL|WEAK|ELITE|BOSS))?$/);
+  if (!match) return null;
+  const img = el("img", { class: cls, src: `img/monsters/${match[1].toLowerCase()}.png`, alt: "", width: 40, height: 40, loading: "lazy" });
+  img.addEventListener("error", () => img.remove(), { once: true });
+  return img;
+}
+
 // Small hoverable card / relic (same popups as the tables).
 function miniCard(id) {
   const cell = cardCell(id);
@@ -186,12 +196,15 @@ function resultLine(run, rooms) {
       ? encounterName(run.killed_by)
       : pretty(run.killed_by)
     : null;
+  // The killer's picture in front of the line, when it was a fight.
+  const loss = (text) =>
+    el("p", { class: "run-result loss" }, monsterPic(run.killed_by, "result-monster"), el("span", { text }));
   if (run.abandoned) {
     const inFight = killer && /^ENCOUNTER\./.test(run.killed_by);
-    return el("p", { class: "run-result loss", text: `Abandoned${where}${inFight ? `, during ${killer} (counts as killed by it)` : ""}` });
+    return loss(`Abandoned${where}${inFight ? `, during ${killer} (counts as killed by it)` : ""}`);
   }
   if (run.win) return el("p", { class: "run-result win", text: "Victory" });
-  return el("p", { class: "run-result loss", text: killer ? `Killed by ${killer}${where}` : `Defeated${where}` });
+  return loss(killer ? `Killed by ${killer}${where}` : `Defeated${where}`);
 }
 
 function runHeader(data) {
@@ -401,6 +414,7 @@ function runLog(data) {
           "span",
           { class: "log-room" },
           mapIcon(room),
+          FIGHT_ROOMS.has(room.room_type) ? monsterPic(room.model_id) : null,
           el("span", {}, roomTitle(room), room.map_type === "unknown" ? el("span", { class: "dim", text: " (?)" }) : null),
         ),
       ),
