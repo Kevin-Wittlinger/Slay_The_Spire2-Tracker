@@ -469,6 +469,100 @@ th[aria-sort="descending"]::after {
 td.num {
   font-variant-numeric: tabular-nums;
 }
+
+/* ---------- compare (Card WR, Card pick rate, Relic WR) ---------- */
+.compare-cell {
+  width: 1%;
+  padding-right: 0;
+}
+.compare-cell input {
+  width: 18px;
+  height: 18px;
+  accent-color: var(--accent);
+  cursor: pointer;
+}
+.compare-panel {
+  margin-bottom: 12px;
+  padding: 12px 14px;
+  border: 1px solid var(--accent);
+  border-radius: var(--radius);
+  background: var(--panel);
+}
+.compare-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 8px;
+}
+.compare-head .link {
+  margin-left: auto;
+}
+.compare-limit:empty {
+  display: none;
+}
+.compare-panel > .hint {
+  margin: 6px 0 0;
+}
+.compare-wrap {
+  overflow-x: auto;
+}
+.compare-table {
+  width: auto;
+}
+.compare-table th,
+.compare-table td {
+  position: static;
+  background: none;
+  border-bottom-color: var(--line);
+}
+.compare-table tbody tr:hover {
+  background: none;
+}
+.compare-table thead th {
+  position: relative;
+  min-width: 150px;
+  vertical-align: bottom;
+  text-align: center;
+  color: var(--text);
+}
+.compare-table thead img {
+  display: block;
+  margin: 0 auto 6px;
+}
+.compare-card {
+  height: auto;
+  max-width: 150px;
+}
+.compare-name {
+  display: block;
+  white-space: normal;
+}
+.compare-remove {
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  padding: 0 6px;
+  font-size: 12px;
+  line-height: 20px;
+}
+.compare-table tbody th {
+  color: var(--dim);
+}
+.compare-table tbody td {
+  text-align: center;
+}
+.compare-table td.dim {
+  color: var(--dim);
+}
+.compare-table td.best {
+  box-shadow: inset 0 0 0 1px var(--good);
+  border-radius: 4px;
+}
+.compare-table td.best .pct::after {
+  content: " ★";
+  color: var(--accent);
+}
 /* Let the character column hug its logo instead of stretching across the table. */
 td.char-cell {
   width: 1%;

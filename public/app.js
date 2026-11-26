@@ -733,6 +733,129 @@ function swapView(host, ...nodes) {
 // rows without wiping their search. Stored by column name; switching tabs clears it.
 let tableMemory = null;
 
+// ---------- compare ----------
+// Tick cards (or relics) in their table to see them side by side. Card WR and Card pick rate share one
+// list, and the panel shows both numbers for each card. The lists stay while switching tabs or filters.
+const COMPARE_TABS = { card_win_rate: "card", card_pick_rate: "card", relic_win_rate: "relic" };
+const COMPARE_MAX = 6;
+const compare = { open: false, card: [], relic: [] };
+const COMPARE_ROWS = {
+  card: [
+    ["Win %", "win_pct"],
+    ["Runs with it", "runs"],
+    ["Wins", "wins"],
+    ["Pick %", "pick_pct"],
+    ["Offered", "offered"],
+    ["Picked", "picked"],
+  ],
+  relic: [
+    ["Win %", "win_pct"],
+    ["Runs with it", "runs"],
+    ["Wins", "wins"],
+  ],
+};
+// The other card table's rows, per filter set, so ticking a box doesn't refetch them.
+const compareCache = new Map();
+let compareDraw = 0;
+
+function compareRowsFor(tab) {
+  const key = `${tab}?${statsQuery()}`;
+  if (!compareCache.has(key)) {
+    if (compareCache.size > 8) compareCache.clear();
+    compareCache.set(key, api(`/api/stats/${tab}?${statsQuery()}`).catch(() => []));
+  }
+  return compareCache.get(key);
+}
+
+function compareHeader(kind, id, onRemove) {
+  const name = pretty(id);
+  const slug = String(id).replace(/^[A-Z]+\./, "").toLowerCase();
+  const img =
+    kind === "card"
+      ? el("img", { class: "compare-card", src: `img/cards-large/${slug}.webp`, alt: "", width: 150, loading: "lazy" })
+      : el("img", { class: "compare-relic", src: `img/relics/${slug}.png`, alt: "", width: 64, height: 64, loading: "lazy" });
+  img.addEventListener("error", () => img.remove(), { once: true });
+  return el(
+    "th",
+    { scope: "col" },
+    el("button", { type: "button", class: "compare-remove", "aria-label": `Remove ${name} from the comparison`, title: "Remove", text: "✕", onclick: onRemove }),
+    img,
+    el("span", { class: "compare-name", text: name }),
+  );
+}
+
+async function renderCompare(kind, panel, rows, limitNote, onChange) {
+  const draw = ++compareDraw;
+  const list = compare[kind];
+  const clear = el("button", { type: "button", class: "link", text: "Clear", onclick: () => { list.length = 0; onChange(); } });
+  const head = el("div", { class: "compare-head" }, el("strong", { text: `Compare ${kind}s` }), limitNote, list.length ? clear : null);
+  if (!list.length) {
+    panel.replaceChildren(head, el("p", { class: "hint", text: `Tick up to ${COMPARE_MAX} ${kind}s in the table below to compare them here.` }));
+    return;
+  }
+
+  // Everything known about each chosen id: this table's row, plus the other card table's for cards.
+  const sources = [rows];
+  if (kind === "card") {
+    const other = state.tab === "card_win_rate" ? "card_pick_rate" : "card_win_rate";
+    sources.push(await compareRowsFor(other));
+  }
+  const info = kind === "card" ? await loadCardInfo() : await loadRelicInfo();
+  if (draw !== compareDraw) return; // a newer tick redrew it already
+  const byId = new Map();
+  for (const source of sources)
+    for (const row of source) if (list.includes(row[kind])) byId.set(row[kind], { ...byId.get(row[kind]), ...row });
+
+  const metrics = [...COMPARE_ROWS[kind]];
+  const extra = kind === "card" ? [["Color", (id) => info[id]?.[1]], ["Rarity", (id) => info[id]?.[0]]] : [["Rarity", (id) => info[id]?.[0]]];
+  const table = el("table", { class: "compare-table" });
+  table.append(
+    el(
+      "thead",
+      {},
+      el(
+        "tr",
+        {},
+        el("td"),
+        ...list.map((id) => compareHeader(kind, id, () => { list.splice(list.indexOf(id), 1); onChange(); })),
+      ),
+    ),
+  );
+  const body = el("tbody");
+  for (const [label, read] of extra)
+    body.append(el("tr", {}, el("th", { scope: "row", text: label }), ...list.map((id) => el("td", { text: read(id) || "—" }))));
+  let missing = false;
+  for (const [label, col] of metrics) {
+    const values = list.map((id) => byId.get(id)?.[col]);
+    const known = values.filter((v) => typeof v === "number");
+    // The best percentage is marked when there is something to beat.
+    const best = /pct$/.test(col) && known.length > 1 ? Math.max(...known) : null;
+    body.append(
+      el(
+        "tr",
+        {},
+        el("th", { scope: "row", text: label }),
+        ...values.map((value) => {
+          if (typeof value !== "number") {
+            missing = true;
+            return el("td", { class: "num dim", text: "—" });
+          }
+          const td = buildCell(null, col, value);
+          td.classList.add("num");
+          if (value === best) td.classList.add("best");
+          return td;
+        }),
+      ),
+    );
+  }
+  table.append(body);
+  panel.replaceChildren(
+    head,
+    el("div", { class: "compare-wrap" }, table),
+    ...(missing ? [el("p", { class: "hint", text: "— means no data under the current filters (or fewer than the Min sample)." })] : []),
+  );
+}
+
 // Pictures in place of (or beside) plain text, by column. Each returns null when it has no picture
 // for the value, and the cell then shows text.
 const CELL_RENDERERS = {
@@ -803,11 +926,20 @@ function renderTable(rows, host) {
   // run_id isn't shown: a row that has one gets a Details button that opens the run page (run.js).
   const cols = Object.keys(rows[0]).filter((col) => col !== "run_id");
   const hasRunPage = "run_id" in rows[0];
+  // Card and relic tables can pick rows to compare side by side (see renderCompare).
+  const compareKind = COMPARE_TABS[state.tab] && cols.includes(COMPARE_TABS[state.tab]) ? COMPARE_TABS[state.tab] : null;
+  const comparing = Boolean(compareKind && compare.open);
   // Everything a redraw needs is worked out once per row: the values, what each sorts by, the
   // lowercase text the search box matches, and (on first display) the <tr> itself. Searching and
   // sorting then only filter and reorder rows that already exist.
   const data = rows.map((source) => {
-    const row = { cells: cols.map((col) => source[col]), tr: null, runId: source.run_id || null };
+    const row = {
+      cells: cols.map((col) => source[col]),
+      tr: null,
+      runId: source.run_id || null,
+      id: compareKind ? source[compareKind] : null,
+      box: null,
+    };
     if ("player" in source) {
       // Keep the clickable list on the row; the cell value becomes plain names
       // so sorting and searching work on what people see.
@@ -843,8 +975,50 @@ function renderTable(rows, host) {
         if (!event.target.closest("a, button")) openRun(row.runId);
       });
     }
+    if (comparing) {
+      row.box = el("input", { type: "checkbox", "aria-label": `Compare ${pretty(row.id)}` });
+      row.box.checked = compare[compareKind].includes(row.id);
+      row.box.addEventListener("change", () => toggleCompare(row));
+      row.tr.prepend(el("td", { class: "compare-cell" }, row.box));
+    }
     return row.tr;
   };
+
+  // ---- compare ----
+  const compareButton = compareKind
+    ? el("button", {
+        type: "button",
+        class: "compare-btn",
+        title: `Pick ${compareKind}s in the table and see their stats side by side`,
+        onclick: () => {
+          compare.open = !compare.open;
+          renderTable(rows, host);
+        },
+      })
+    : null;
+  const comparePanel = comparing ? el("section", { class: "compare-panel", "aria-label": `Compare ${compareKind}s` }) : null;
+  const compareLimit = el("span", { class: "hint compare-limit", role: "status" });
+  function updateCompare() {
+    if (!compareKind) return;
+    const list = compare[compareKind];
+    if (list.length < COMPARE_MAX) compareLimit.textContent = "";
+    compareButton.textContent = compare.open ? `Done comparing${list.length ? ` (${list.length})` : ""}` : `Compare${list.length ? ` (${list.length})` : ""}`;
+    compareButton.setAttribute("aria-pressed", String(compare.open));
+    compareButton.classList.toggle("primary", compare.open);
+    if (!comparing) return;
+    for (const row of data) if (row.box) row.box.checked = list.includes(row.id);
+    renderCompare(compareKind, comparePanel, rows, compareLimit, updateCompare);
+  }
+  function toggleCompare(row) {
+    const list = compare[compareKind];
+    compareLimit.textContent = "";
+    if (!row.box.checked) list.splice(list.indexOf(row.id), 1);
+    else if (list.length >= COMPARE_MAX) {
+      row.box.checked = false;
+      compareLimit.textContent = `Up to ${COMPARE_MAX} at once. Remove one to add another.`;
+    } else list.push(row.id);
+    updateCompare();
+  }
 
   if (!tableMemory || tableMemory.tab !== state.tab)
     tableMemory = { tab: state.tab, search: "", selected: new Map(), sortCol: null, ascending: false };
@@ -907,6 +1081,7 @@ function renderTable(rows, host) {
   });
   toolbar.append(searchInput);
   if (state.tab === "relic_win_rate") toolbar.append(relicSourceSelect());
+  if (compareButton) toolbar.append(compareButton);
 
   const headRow = el("tr");
   const filteredCols = new Set(); // columns that got a dropdown
@@ -967,14 +1142,17 @@ function renderTable(rows, host) {
     toolbar.append(select);
   });
   if (hasRunPage) headRow.append(el("th", { scope: "col", class: "no-sort" }, el("span", { class: "visually-hidden", text: "Run page" })));
+  if (comparing) headRow.prepend(el("th", { scope: "col", class: "no-sort compare-cell" }, el("span", { class: "visually-hidden", text: "Compare" })));
   toolbar.append(count);
   // A remembered filter on a column that now has no dropdown (too few values) can't be cleared, so drop it.
   for (const i of [...selected.keys()]) if (!filteredCols.has(i)) selected.delete(i);
 
   draw();
+  updateCompare();
   swapView(
     host,
     toolbar,
+    ...(comparePanel ? [comparePanel] : []),
     el("div", { class: "table-wrap" }, el("table", {}, el("thead", {}, headRow), tbody)),
     ...(cols.includes("encounter") || cols.includes("killed_by") ? [el("p", { class: "hint", text: ENEMY_NOTE })] : []),
   );
